@@ -1,0 +1,64 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+---
+name: "Fall Detector"
+description: "AI-powered elderly fall detection using Frigate camera feeds"
+version: "0.1.0"
+slug: "fall_detector"
+url: "https://github.com/askb/ha-fall-detector"
+arch:
+  - amd64
+  - aarch64
+  - armv7
+startup: application
+boot: auto
+homeassistant_api: true
+ingress: true
+ingress_port: 8099
+panel_icon: "mdi:human-fall"
+panel_title: "Fall Detector"
+map:
+  - share:rw
+  - media:rw
+ports:
+  8099/tcp: null
+ports_description:
+  8099/tcp: "Web API (internal only via ingress)"
+options:
+  frigate_url: "http://ccab4aaf-frigate:5000"
+  mqtt_host: "core-mosquitto"
+  mqtt_port: 1883
+  mqtt_username: ""
+  mqtt_password: ""
+  monitored_cameras: []
+  frame_sample_rate: 2.0
+  person_gate_required: true
+  pose_backend: "movenet_lightning"
+  detection_confidence_threshold: 0.7
+  fall_confirmation_seconds: 5
+  recovery_window_seconds: 30
+  alert_cooldown_seconds: 120
+  snapshot_on_alert: true
+  clip_on_alert: false
+  retain_debug_frames: false
+  log_level: "info"
+schema:
+  frigate_url: url
+  mqtt_host: str
+  mqtt_port: port
+  mqtt_username: str?
+  mqtt_password: password?
+  monitored_cameras:
+    - str
+  frame_sample_rate: float
+  person_gate_required: bool
+  pose_backend: list(movenet_lightning|movenet_thunder)
+  detection_confidence_threshold: float
+  fall_confirmation_seconds: int
+  recovery_window_seconds: int
+  alert_cooldown_seconds: int
+  snapshot_on_alert: bool
+  clip_on_alert: bool
+  retain_debug_frames: bool
+  log_level: list(debug|info|warning|error)
+watchdog: "http://[HOST]:[PORT:8099]/health"

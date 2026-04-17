@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+[general]
+ignore=body-is-missing
+
+[title-max-length]
+line-length=72
+
+[body-max-line-length]
+line-length=120

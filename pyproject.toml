@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+
+[project]
+name = "ha-fall-detector"
+version = "0.1.0"
+description = "Home Assistant add-on and HACS integration for elderly fall detection using Frigate NVR"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+authors = [
+    { name = "Anil Belur", email = "askb23@gmail.com" },
+]
+keywords = ["home-assistant", "fall-detection", "frigate", "elderly-care"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Home Automation",
+]
+
+[project.urls]
+Homepage = "https://github.com/askb/ha-fall-detector"
+Repository = "https://github.com/askb/ha-fall-detector"
+Issues = "https://github.com/askb/ha-fall-detector/issues"
+
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "fall_detector"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "addon/fall_detector/tests"]
+asyncio_mode = "auto"

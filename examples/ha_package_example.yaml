@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+# Home Assistant Package for Fall Detection
+#
+# Add this to your HA packages configuration to set up
+# input helpers and automations for fall detection.
+# Place in config/packages/fall_detector.yaml
+---
+input_boolean:
+  fall_detector_maintenance_mode:
+    name: "Fall Detector Maintenance Mode"
+    icon: "mdi:wrench"
+
+automation:
+  - alias: "Fall Detector: Acknowledge from Mobile"
+    trigger:
+      - platform: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "ACKNOWLEDGE_FALL"
+    action:
+      - service: fall_detector.acknowledge_alert
+
+  - alias: "Fall Detector: Suppress During Maintenance"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.fall_detector_maintenance_mode
+        to: "on"
+    action:
+      - service: fall_detector.mute_notifications
+      - service: persistent_notification.create
+        data:
+          title: "Fall Detector - Maintenance Mode"
+          message: "Fall detection notifications are muted during maintenance."
+
+  - alias: "Fall Detector: Resume After Maintenance"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.fall_detector_maintenance_mode
+        to: "off"
+    action:
+      - service: fall_detector.unmute_notifications
+      - service: persistent_notification.create
+        data:
+          title: "Fall Detector - Active"
+          message: "Fall detection notifications have been resumed."

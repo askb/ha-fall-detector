@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: Apache-2.0
+# Fall Detection - Escalation Automation
+#
+# If fall is not acknowledged within 2 minutes, escalate:
+# - Turn on lights near the fallen person
+# - Play TTS announcement on smart speakers
+# - Send follow-up notification
+---
+alias: "Fall Detector: Escalation"
+description: "Escalate unacknowledged fall alert after 2 minutes"
+trigger:
+  - platform: state
+    entity_id:
+      - binary_sensor.living_room_fall_detected
+      - binary_sensor.bedroom_fall_detected
+      - binary_sensor.hallway_fall_detected
+    to: "on"
+    for:
+      minutes: 2
+condition:
+  - condition: state
+    entity_id: switch.fall_detector_notifications_muted
+    state: "off"
+action:
+  - service: light.turn_on
+    target:
+      area_id: "{{ trigger.entity_id.split('.')[1].replace('_fall_detected', '') }}"
+    data:
+      brightness_pct: 100
+  - service: tts.speak
+    target:
+      entity_id: media_player.living_room_speaker
+    data:
+      message: >-
+        Attention! A fall has been detected in the
+        {{ trigger.entity_id.split('.')[1].replace('_fall_detected', '').replace('_', ' ') }}.
+        Please check on the resident.
+  - service: notify.mobile_app_caregivers_phone
+    data:
+      title: "🚨 Fall Alert - ESCALATED"
+      message: >-
+        Fall on {{ trigger.entity_id.split('.')[1].replace('_fall_detected', '').replace('_', ' ') }}
+        has not been acknowledged for 2 minutes!
+      data:
+        importance: high
+        channel: fall_alerts_urgent
+mode: single

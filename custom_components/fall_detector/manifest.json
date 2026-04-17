@@ -1,0 +1,13 @@
+{
+  "domain": "fall_detector",
+  "name": "Fall Detector",
+  "codeowners": ["@askb"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/askb/ha-fall-detector",
+  "integration_type": "service",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/askb/ha-fall-detector/issues",
+  "requirements": ["httpx>=0.27.0"],
+  "version": "0.1.0"
+}

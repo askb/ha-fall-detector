@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+test_alert:
+  name: Test Alert
+  description: Send a test fall detection alert for a specific camera.
+  fields:
+    camera:
+      name: Camera
+      description: The camera name to send the test alert for.
+      required: true
+      example: "living_room"
+      selector:
+        text:
+
+acknowledge_alert:
+  name: Acknowledge Alert
+  description: Acknowledge an active fall detection alert.
+  fields:
+    camera:
+      name: Camera
+      description: The camera name to acknowledge. If omitted, acknowledges all alerts.
+      required: false
+      example: "living_room"
+      selector:
+        text:
+
+mute_notifications:
+  name: Mute Notifications
+  description: Mute all fall detection notifications.
+
+unmute_notifications:
+  name: Unmute Notifications
+  description: Resume fall detection notifications.
+
+reset_camera_state:
+  name: Reset Camera State
+  description: Reset all detection state for a specific camera.
+  fields:
+    camera:
+      name: Camera
+      description: The camera name to reset.
+      required: true
+      example: "living_room"
+      selector:
+        text:
+
+trigger_reanalysis:
+  name: Trigger Reanalysis
+  description: Force an immediate data refresh from the Fall Detector add-on.

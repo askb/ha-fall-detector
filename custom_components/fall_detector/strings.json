@@ -1,0 +1,139 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Fall Detector Add-on",
+        "description": "Enter the URL for the Fall Detector add-on. If running as a Home Assistant add-on, the default should work.",
+        "data": {
+          "addon_url": "Add-on URL"
+        }
+      },
+      "frigate": {
+        "title": "Frigate NVR Connection",
+        "description": "Enter the URL for your Frigate NVR instance.",
+        "data": {
+          "frigate_url": "Frigate URL"
+        }
+      },
+      "cameras": {
+        "title": "Select Cameras to Monitor",
+        "description": "Choose which cameras should be monitored for fall detection.",
+        "data": {
+          "monitored_cameras": "Cameras"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the Fall Detector add-on. Please check the URL and ensure the add-on is running.",
+      "unknown": "An unexpected error occurred. Please check the logs."
+    },
+    "abort": {
+      "already_configured": "Fall Detector is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Fall Detector Settings",
+        "description": "Adjust detection thresholds and notification behavior.",
+        "data": {
+          "confidence_threshold": "Detection Confidence Threshold",
+          "fall_confirmation": "Fall Confirmation Time (seconds)",
+          "recovery_window": "Recovery Window (seconds)",
+          "alert_cooldown": "Alert Cooldown (seconds)",
+          "escalation_enabled": "Enable Alert Escalation",
+          "quiet_hours_start": "Quiet Hours Start (HH:MM, empty to disable)",
+          "quiet_hours_end": "Quiet Hours End (HH:MM)",
+          "debug_logging": "Enable Debug Logging"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "fall_detected": {
+        "name": "Fall Detected"
+      },
+      "online": {
+        "name": "Online"
+      }
+    },
+    "sensor": {
+      "fall_confidence": {
+        "name": "Fall Confidence"
+      },
+      "last_fall_time": {
+        "name": "Last Fall Time"
+      },
+      "monitor_status": {
+        "name": "Monitor Status"
+      },
+      "active_alerts": {
+        "name": "Active Alerts"
+      },
+      "last_event": {
+        "name": "Last Event"
+      }
+    },
+    "switch": {
+      "alerts_enabled": {
+        "name": "Alerts Enabled"
+      },
+      "notifications_muted": {
+        "name": "Notifications Muted"
+      }
+    },
+    "button": {
+      "test_alert": {
+        "name": "Test Alert"
+      },
+      "reset_all": {
+        "name": "Reset All"
+      }
+    }
+  },
+  "services": {
+    "test_alert": {
+      "name": "Test Alert",
+      "description": "Send a test fall detection alert.",
+      "fields": {
+        "camera": {
+          "name": "Camera",
+          "description": "Camera name for the test alert."
+        }
+      }
+    },
+    "acknowledge_alert": {
+      "name": "Acknowledge Alert",
+      "description": "Acknowledge an active alert.",
+      "fields": {
+        "camera": {
+          "name": "Camera",
+          "description": "Camera name (optional, acknowledges all if omitted)."
+        }
+      }
+    },
+    "mute_notifications": {
+      "name": "Mute Notifications",
+      "description": "Mute all fall detection notifications."
+    },
+    "unmute_notifications": {
+      "name": "Unmute Notifications",
+      "description": "Resume fall detection notifications."
+    },
+    "reset_camera_state": {
+      "name": "Reset Camera State",
+      "description": "Reset detection state for a camera.",
+      "fields": {
+        "camera": {
+          "name": "Camera",
+          "description": "Camera name to reset."
+        }
+      }
+    },
+    "trigger_reanalysis": {
+      "name": "Trigger Reanalysis",
+      "description": "Force an immediate data refresh."
+    }
+  }
+}

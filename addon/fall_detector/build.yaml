@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+---
+build_from:
+  amd64: ghcr.io/home-assistant/amd64-base-python:3.12-alpine3.19
+  aarch64: ghcr.io/home-assistant/aarch64-base-python:3.12-alpine3.19
+  armv7: ghcr.io/home-assistant/armv7-base-python:3.12-alpine3.19
+args:
+  BUILD_ARCH: "${BUILD_ARCH}"
+labels:
+  org.opencontainers.image.title: "Fall Detector Add-on"
+  org.opencontainers.image.description: "AI-powered elderly fall detection for Home Assistant"
+  org.opencontainers.image.source: "https://github.com/askb/ha-fall-detector"
+  org.opencontainers.image.licenses: "Apache-2.0"

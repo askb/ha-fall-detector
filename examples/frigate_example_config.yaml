@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: Apache-2.0
+# Example Frigate configuration for fall detection
+#
+# This shows the minimum Frigate configuration needed for
+# the Fall Detector add-on to work properly.
+# Adapt camera URLs and detection settings to your environment.
+---
+mqtt:
+  host: core-mosquitto
+  port: 1883
+
+detectors:
+  # CPU detector (default, works everywhere)
+  cpu:
+    type: cpu
+    num_threads: 3
+  # Optional: Google Coral TPU (recommended for Frigate performance)
+  # coral:
+  #   type: edgetpu
+  #   device: usb
+
+cameras:
+  living_room:
+    ffmpeg:
+      inputs:
+        - path: rtsp://user:pass@camera-ip:554/stream1
+          roles:
+            - record
+        - path: rtsp://user:pass@camera-ip:554/stream2
+          roles:
+            - detect
+    detect:
+      width: 704
+      height: 480
+      fps: 5
+    objects:
+      track:
+        - person
+      filters:
+        person:
+          min_score: 0.6
+          threshold: 0.7
+    record:
+      enabled: true
+      retain:
+        days: 3
+        mode: motion
+    snapshots:
+      enabled: true
+      retain:
+        default: 3
+
+  bedroom:
+    ffmpeg:
+      inputs:
+        - path: rtsp://user:pass@camera-ip-2:554/stream2
+          roles:
+            - detect
+    detect:
+      width: 704
+      height: 480
+      fps: 3
+    objects:
+      track:
+        - person

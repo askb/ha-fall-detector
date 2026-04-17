@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+# Fall Detection - Mobile Push Notification
+#
+# Sends a push notification to caregiver's phone when a fall is detected.
+# Include camera name, confidence, and a snapshot if available.
+---
+alias: "Fall Detector: Mobile Alert"
+description: "Send mobile push notification when fall is detected"
+trigger:
+  - platform: event
+    event_type: fall_detector.fall_detected
+action:
+  - service: notify.mobile_app_caregivers_phone
+    data:
+      title: "⚠️ Fall Detected!"
+      message: >-
+        Fall detected on {{ trigger.event.data.camera }}
+        at {{ now().strftime('%H:%M:%S') }}
+        (confidence: {{ (trigger.event.data.confidence * 100) | round(0) }}%).
+      data:
+        tag: "fall-alert-{{ trigger.event.data.camera }}"
+        importance: high
+        channel: fall_alerts
+        actions:
+          - action: "ACKNOWLEDGE_FALL"
+            title: "✅ Acknowledge"
+          - action: "CALL_EMERGENCY"
+            title: "🚨 Call Emergency"
+        image: >-
+          /api/frigate/notifications/{{ trigger.event.data.frigate_event_id }}/snapshot.jpg
+mode: single

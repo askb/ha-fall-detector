@@ -25,7 +25,7 @@ ports:
 ports_description:
   8099/tcp: "Web API (internal only via ingress)"
 options:
-  frigate_url: "http://ccab4aaf-frigate:5000"
+  frigate_url: "http://ccab4aaf-frigate-fa:5000"
   mqtt_host: "core-mosquitto"
   mqtt_port: 1883
   mqtt_username: ""

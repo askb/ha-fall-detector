@@ -33,8 +33,9 @@ COPY requirements.txt /app/requirements.txt
 RUN pip3 install --no-cache-dir --prefer-binary -r /app/requirements.txt \
     && apk del .build-deps
 
-# Copy application code
+# Copy application code and models
 COPY app/ /app/app/
+COPY models/ /app/models/
 
 # Copy entrypoint
 COPY run.sh /run.sh

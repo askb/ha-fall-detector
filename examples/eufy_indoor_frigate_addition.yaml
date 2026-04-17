@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: Apache-2.0
+# Eufy T8410 (2K Indoor Pan & Tilt) — Frigate config additions
+#
+# Camera: Eufy Indoor 2K Pan & Tilt (T8410)
+# IP: 192.168.1.196
+# RTSP URL: rtsp://192.168.1.196/live0
+# Location: Living room
+#
+# HOW TO USE:
+# 1. Enable RTSP in Eufy Security app → Camera Settings → Storage → NAS (RTSP)
+# 2. Add the go2rtc stream block below under your existing go2rtc.streams section
+# 3. Add the camera block below under your existing cameras section
+# 4. Restart Frigate
+#
+# NOTE: The T8410 provides a single RTSP stream (no sub-stream).
+# We restream through go2rtc to avoid hammering the camera with
+# multiple connections. Frigate's detect feed is downscaled to
+# 704x480 to keep CPU usage low on RPi4.
+# ---
+
+# ============================================================
+# ADD UNDER: go2rtc → streams (alongside your front_camera entries)
+# ============================================================
+# go2rtc:
+#   streams:
+#     front_camera:
+#     - {FRIGATE_RTSP_MAIN}
+#     front_camera_sub:
+#     - {FRIGATE_RTSP_SUB}
+#
+#     # --- ADD THIS ---
+#     eufy_indoor:
+#     - rtsp://192.168.1.196/live0
+
+# ============================================================
+# ADD UNDER: cameras (alongside your front_camera block)
+# ============================================================
+# cameras:
+#   front_camera:
+#     ...existing config...
+#
+#   # --- ADD THIS ---
+#   eufy_indoor:
+#     enabled: true
+#     ffmpeg:
+#       hwaccel_args: preset-rpi-64-h264
+#       inputs:
+#       - path: rtsp://127.0.0.1:8554/eufy_indoor
+#         roles:
+#         - detect
+#         - record
+#     snapshots:
+#       enabled: true
+#       timestamp: false
+#       bounding_box: true
+#       crop: false
+#       quality: 90
+#     detect:
+#       enabled: true
+#       width: 704
+#       height: 480
+#       fps: 5
+#     objects:
+#       track:
+#       - person
+#       filters:
+#         person:
+#           min_area: 5000
+#           threshold: 0.7
+#     record:
+#       enabled: true
+#       continuous:
+#         days: 0
+#       motion:
+#         days: 3
+#     notifications:
+#       enabled: true

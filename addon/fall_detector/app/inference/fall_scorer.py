@@ -136,10 +136,13 @@ class FallScorer:
             if camera_state.consecutive_fall_frames > 0 and confidence < 0.3:
                 camera_state.consecutive_fall_frames = 0
                 camera_state.fall_candidate_start = None
+            below_threshold_codes = list(reason_codes)
+            if confidence > 0.2:
+                below_threshold_codes.append(ReasonCode.LOW_CONFIDENCE_REJECTED)
             return ScoreResult(
                 stage=DetectionStage.POSE_ESTIMATED if pose.pose_confidence > 0.3 else DetectionStage.PERSON_DETECTED,
                 confidence=confidence,
-                reason_codes=[ReasonCode.LOW_CONFIDENCE_REJECTED] if confidence > 0.2 else [],
+                reason_codes=below_threshold_codes,
                 pose_summary=pose,
                 motion_summary=motion,
             )

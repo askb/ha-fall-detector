@@ -9,29 +9,29 @@ LABEL org.opencontainers.image.description="AI-powered elderly fall detection fo
 LABEL org.opencontainers.image.source="https://github.com/askb/ha-fall-detector"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
-# Install system dependencies needed for OpenCV, numpy, and TFLite
-RUN apk add --no-cache \
+# Install system dependencies (Debian bookworm)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         curl \
-        py3-opencv \
-        py3-numpy \
-        py3-pillow \
-        libstdc++ \
-        libjpeg-turbo \
-        libpng \
-        tiff \
-        libwebp \
-        openblas \
-    && apk add --no-cache --virtual .build-deps \
-        build-base \
-        python3-dev \
-        openblas-dev \
-        gfortran
+        python3 \
+        python3-pip \
+        python3-venv \
+        python3-numpy \
+        python3-opencv \
+        python3-pil \
+        libopenblas0 \
+        libjpeg62-turbo \
+        libpng16-16 \
+        libtiff6 \
+        libwebp7 \
+        libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies first (layer caching)
+# Copy and install Python dependencies (use --break-system-packages for Debian 12+)
 WORKDIR /app
 COPY requirements.txt /app/requirements.txt
-RUN pip3 install --no-cache-dir --prefer-binary -r /app/requirements.txt \
-    && apk del .build-deps
+RUN pip3 install --no-cache-dir --break-system-packages --prefer-binary \
+    -r /app/requirements.txt
 
 # Copy application code and models
 COPY app/ /app/app/

@@ -9,7 +9,6 @@ url: "https://github.com/askb/ha-fall-detector"
 arch:
   - amd64
   - aarch64
-  - armv7
 startup: application
 boot: auto
 homeassistant_api: true

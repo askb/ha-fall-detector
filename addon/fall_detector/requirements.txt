@@ -2,10 +2,7 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
 pydantic-settings==2.7.1
-numpy==1.26.4
-opencv-python-headless==4.10.0.84
-tflite-runtime==2.14.0
 aiomqtt==2.3.0
 httpx==0.28.1
-Pillow==11.1.0
 structlog==24.4.0
+tflite-runtime==2.14.0

@@ -54,3 +54,4 @@ htmlcov/
 .env.local
 .env.*.local
 docker-test/.env
+yolo11*.pt

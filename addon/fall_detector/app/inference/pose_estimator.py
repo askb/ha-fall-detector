@@ -218,3 +218,166 @@ class MoveNetEstimator(PoseEstimator):
             body_aspect_ratio=aspect_ratio,
             pose_confidence=0.1,  # Low confidence for fallback
         )
+
+
+class YoloPoseEstimator(PoseEstimator):
+    """YOLO-Pose estimator using PyTorch with GPU acceleration (ROCm/CUDA).
+
+    Performs person detection + keypoint estimation in a single pass.
+    Supports AMD ROCm and NVIDIA CUDA GPUs via PyTorch.
+    Falls back to CPU if no GPU is available.
+    """
+
+    # YOLO-Pose uses COCO keypoint order (same 17 keypoints as MoveNet)
+    YOLO_KEYPOINT_NAMES = [
+        "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+        "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+        "left_wrist", "right_wrist", "left_hip", "right_hip",
+        "left_knee", "right_knee", "left_ankle", "right_ankle",
+    ]
+
+    MODEL_VARIANTS = {
+        "yolo_pose_nano": "yolo11n-pose.pt",
+        "yolo_pose_small": "yolo11s-pose.pt",
+        "yolo_pose_medium": "yolo11m-pose.pt",
+    }
+
+    def __init__(
+        self,
+        model_variant: str = "yolo_pose_nano",
+        model_dir: str = "/data/models",
+        device: str = "auto",
+    ):
+        self._model_variant = model_variant
+        self._model_dir = Path(model_dir)
+        self._model = None
+        self._device = device
+        self._ready = False
+        self._gpu_name: str | None = None
+
+    async def initialize(self) -> None:
+        """Load YOLO-Pose model and select device."""
+        self._model_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            import torch
+            from ultralytics import YOLO
+
+            # Resolve device
+            if self._device == "auto":
+                if torch.cuda.is_available():
+                    self._device = "cuda:0"
+                    self._gpu_name = torch.cuda.get_device_name(0)
+                else:
+                    self._device = "cpu"
+                    self._gpu_name = None
+
+            # Determine model filename
+            model_file = self.MODEL_VARIANTS.get(
+                self._model_variant, "yolo11n-pose.pt"
+            )
+            model_path = self._model_dir / model_file
+
+            # YOLO auto-downloads if not present
+            self._model = YOLO(str(model_path) if model_path.exists() else model_file)
+
+            # Warm up the model on the target device
+            dummy = np.zeros((192, 192, 3), dtype=np.uint8)
+            self._model(dummy, device=self._device, verbose=False)
+
+            self._ready = True
+            logger.info(
+                "yolo_pose_model_loaded",
+                variant=self._model_variant,
+                device=self._device,
+                gpu=self._gpu_name or "cpu",
+            )
+        except Exception:
+            logger.exception("yolo_pose_load_failed", variant=self._model_variant)
+            self._ready = False
+
+    async def estimate_pose(self, frame: np.ndarray) -> PoseSummary | None:
+        """Run YOLO-Pose inference (person detection + keypoints in one pass)."""
+        if not self._ready or self._model is None:
+            return self._fallback_estimate(frame)
+
+        try:
+            results = self._model(
+                frame,
+                device=self._device,
+                verbose=False,
+                conf=0.3,
+            )
+
+            if not results or len(results) == 0:
+                return None
+
+            r = results[0]
+
+            # No persons detected
+            if r.keypoints is None or len(r.boxes) == 0:
+                return None
+
+            # Use the highest-confidence person detection
+            best_idx = int(r.boxes.conf.argmax())
+            person_conf = float(r.boxes.conf[best_idx])
+            kp_data = r.keypoints.data[best_idx].cpu().numpy()  # [17, 3]
+
+            keypoints = []
+            for i, name in enumerate(self.YOLO_KEYPOINT_NAMES):
+                x, y, conf = kp_data[i]
+                # YOLO outputs pixel coords; normalize to [0, 1]
+                h, w = frame.shape[:2]
+                keypoints.append(Keypoint(
+                    name=name,
+                    x=float(x / w) if w > 0 else 0.0,
+                    y=float(y / h) if h > 0 else 0.0,
+                    confidence=float(conf),
+                ))
+
+            return self._build_pose_summary(keypoints, person_conf)
+
+        except Exception:
+            logger.exception("yolo_pose_estimation_failed")
+            return self._fallback_estimate(frame)
+
+    def is_ready(self) -> bool:
+        return self._ready
+
+    def _build_pose_summary(
+        self, keypoints: list[Keypoint], person_confidence: float = 0.0
+    ) -> PoseSummary:
+        """Compute derived metrics from YOLO keypoints."""
+        avg_kp_conf = (
+            sum(k.confidence for k in keypoints) / len(keypoints)
+            if keypoints
+            else 0.0
+        )
+
+        torso_angle = MoveNetEstimator._calculate_torso_angle(keypoints)
+        is_upright = torso_angle is not None and abs(torso_angle) > 45
+        is_prone = torso_angle is not None and abs(torso_angle) < 30
+
+        valid_kps = [k for k in keypoints if k.confidence > 0.3]
+        aspect_ratio = None
+        if len(valid_kps) >= 4:
+            xs = [k.x for k in valid_kps]
+            ys = [k.y for k in valid_kps]
+            width = max(xs) - min(xs)
+            height = max(ys) - min(ys)
+            if width > 0.01:
+                aspect_ratio = height / width
+
+        return PoseSummary(
+            keypoints=keypoints,
+            torso_angle=torso_angle,
+            is_upright=is_upright,
+            is_prone=is_prone,
+            body_aspect_ratio=aspect_ratio,
+            pose_confidence=max(avg_kp_conf, person_confidence),
+        )
+
+    @staticmethod
+    def _fallback_estimate(frame: np.ndarray) -> PoseSummary | None:
+        """Fallback when model is unavailable."""
+        return MoveNetEstimator._fallback_estimate(frame)

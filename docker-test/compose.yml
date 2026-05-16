@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: Apache-2.0
+# Test stack: Frigate + Mosquitto + Fall Detector on ag15 laptop
+# Usage:
+#   1. Copy .env.example to .env and fill in camera credentials
+#   2. docker compose -f docker-test/compose.yml up -d
+#   3. Check: curl http://localhost:8099/health
+#   4. Frigate UI: http://localhost:5000
+---
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: fall-test-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:0.15.1
+    container_name: fall-test-frigate
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    ports:
+      - "5000:5000"     # Frigate web UI + API
+      - "8554:8554"     # RTSP restream (go2rtc)
+      - "8555:8555/tcp" # WebRTC (go2rtc)
+      - "8555:8555/udp"
+    volumes:
+      - ./frigate/config.yml:/config/config.yml:ro
+      - frigate-media:/media/frigate
+      - /dev/dri:/dev/dri  # AMD VAAPI for video decode
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    shm_size: "512mb"
+    environment:
+      - FRIGATE_RTSP_PASSWORD=${CAMERA_PASSWORD:-changeme}
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5000/api/version"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  fall-detector:
+    build:
+      context: ../addon/fall_detector
+      dockerfile: Dockerfile.gpu
+    image: fall-detector:gpu-dev
+    container_name: fall-test-detector
+    restart: unless-stopped
+    depends_on:
+      frigate:
+        condition: service_healthy
+      mosquitto:
+        condition: service_healthy
+    ports:
+      - "8099:8099"
+    devices:
+      - /dev/kfd:/dev/kfd           # ROCm kernel driver
+      - /dev/dri:/dev/dri           # GPU render nodes
+    group_add:
+      - video
+      - render
+    volumes:
+      - ./options-test.json:/data/options.json:ro
+      - fall-detector-data:/data
+    environment:
+      - FALL_DETECTOR_CONFIG_PATH=/data/options.json
+      - FALL_DETECTOR_DATA_PATH=/data
+      - FALL_DETECTOR_SHARE_PATH=/tmp/fall_detector_share
+      - FALL_DETECTOR_MEDIA_PATH=/tmp/fall_detector_media
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8099/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+
+volumes:
+  mosquitto-data:
+  frigate-media:
+  fall-detector-data:

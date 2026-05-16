@@ -1,0 +1,82 @@
+# Frigate config for ag15 laptop testing
+# Adapted from askb-ha-config/addon_configs_templates/frigate-config.yml
+# Changes from HAOS version:
+#   - mqtt.host: fall-test-mosquitto (Docker service name)
+#   - hwaccel_args: preset-vaapi (AMD iGPU instead of RPi)
+#   - detectors: cpu (no Coral TPU attached yet)
+mqtt:
+  enabled: true
+  host: fall-test-mosquitto
+  port: 1883
+  client_id: frigate
+  topic_prefix: frigate
+  stats_interval: 60
+
+detectors:
+  cpu:
+    type: cpu
+    num_threads: 4
+
+ffmpeg:
+  hwaccel_args: preset-vaapi
+
+go2rtc:
+  streams:
+    front_camera:
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@192.168.1.138:554/cam/realmonitor?channel=6&subtype=0
+    front_camera_sub:
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@192.168.1.138:554/cam/realmonitor?channel=6&subtype=1
+
+cameras:
+  front_camera:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/front_camera_sub
+          roles:
+            - detect
+        - path: rtsp://127.0.0.1:8554/front_camera
+          roles:
+            - record
+    snapshots:
+      enabled: true
+      timestamp: false
+      bounding_box: true
+      crop: false
+      quality: 90
+      height: 1080
+    detect:
+      enabled: true
+      width: 704
+      height: 480
+      fps: 3
+    objects:
+      track:
+        - person
+        - car
+        - dog
+        - cat
+      filters:
+        person:
+          min_area: 5000
+          threshold: 0.7
+        car:
+          min_area: 10000
+          threshold: 0.7
+    record:
+      enabled: true
+      retain:
+        days: 1
+    zones:
+      driveway:
+        coordinates: 0.779,1,0.829,0.665,0.494,0.332,0.079,0.476,0,0.507,0,0.747,0,1
+        objects:
+          - person
+          - car
+          - dog
+        inertia: 3
+
+detect:
+  enabled: true
+
+version: 0.15-0

@@ -123,11 +123,19 @@ class AppState:
             frigate_url=self.settings.frigate_url,
         )
 
-        # Pose estimator
-        pose_estimator = MoveNetEstimator(
-            model_variant=self.settings.pose_backend,
-            model_dir=f"{self.settings.fall_detector_data_path}/models",
-        )
+        # Pose estimator — select backend based on config
+        if self.settings.pose_backend.startswith("yolo_pose"):
+            from app.inference.pose_estimator import YoloPoseEstimator
+
+            pose_estimator = YoloPoseEstimator(
+                model_variant=self.settings.pose_backend,
+                model_dir=f"{self.settings.fall_detector_data_path}/models",
+            )
+        else:
+            pose_estimator = MoveNetEstimator(
+                model_variant=self.settings.pose_backend,
+                model_dir=f"{self.settings.fall_detector_data_path}/models",
+            )
 
         # Detection coordinator
         self.coordinator = DetectionCoordinator(

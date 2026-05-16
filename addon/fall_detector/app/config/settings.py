@@ -35,9 +35,13 @@ class Settings(BaseSettings):
 
     # --- Detection pipeline ---
     person_gate_required: bool = True
-    pose_backend: Literal["movenet_lightning", "movenet_thunder"] = (
-        "movenet_lightning"
-    )
+    pose_backend: Literal[
+        "movenet_lightning",
+        "movenet_thunder",
+        "yolo_pose_nano",
+        "yolo_pose_small",
+        "yolo_pose_medium",
+    ] = "movenet_lightning"
     detection_confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
 
     # --- Temporal parameters ---

@@ -1,0 +1,19 @@
+{
+  "frigate_url": "http://fall-test-frigate:5000",
+  "mqtt_host": "fall-test-mosquitto",
+  "mqtt_port": 1883,
+  "mqtt_username": "",
+  "mqtt_password": "",
+  "monitored_cameras": ["front_camera"],
+  "frame_sample_rate": 1.0,
+  "person_gate_required": true,
+  "pose_backend": "yolo_pose_nano",
+  "detection_confidence_threshold": 0.7,
+  "fall_confirmation_seconds": 5,
+  "recovery_window_seconds": 30,
+  "alert_cooldown_seconds": 120,
+  "snapshot_on_alert": true,
+  "clip_on_alert": false,
+  "retain_debug_frames": true,
+  "log_level": "debug"
+}

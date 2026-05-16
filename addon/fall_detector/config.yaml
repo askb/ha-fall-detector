@@ -51,7 +51,7 @@ schema:
     - str
   frame_sample_rate: float
   person_gate_required: bool
-  pose_backend: list(movenet_lightning|movenet_thunder)
+  pose_backend: list(movenet_lightning|movenet_thunder|yolo_pose_nano|yolo_pose_small|yolo_pose_medium)
   detection_confidence_threshold: float
   fall_confirmation_seconds: int
   recovery_window_seconds: int

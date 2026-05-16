@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: Apache-2.0
+# SPDX-FileCopyrightText: 2025 The Linux Foundation
+# GPU-accelerated Dockerfile for AMD ROCm (RX 6800M, etc.)
+# Uses PyTorch + YOLO-Pose for GPU-accelerated pose estimation
+FROM rocm/pytorch:rocm6.2_ubuntu22.04_py3.10_pytorch_release_2.3.0
+
+LABEL maintainer="Anil Belur <askb23@gmail.com>"
+LABEL org.opencontainers.image.title="Fall Detector Add-on (GPU)"
+LABEL org.opencontainers.image.description="GPU-accelerated elderly fall detection for Home Assistant"
+
+# Install system dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        curl \
+        python3-opencv \
+        libjpeg-dev \
+        libpng-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Install app dependencies WITHOUT touching torch/torchvision (already in base as ROCm build)
+# 1. Install ultralytics without auto-pulling CUDA torch
+# 2. Install remaining app deps (fastapi, mqtt, etc.)
+COPY requirements.txt /app/requirements.txt
+COPY requirements-gpu.txt /app/requirements-gpu.txt
+RUN pip3 install --no-cache-dir --prefer-binary \
+    --no-deps ultralytics && \
+    pip3 install --no-cache-dir --prefer-binary \
+    ultralytics-thop polars psutil matplotlib scipy opencv-python-headless && \
+    pip3 install --no-cache-dir --prefer-binary \
+    fastapi uvicorn pydantic pydantic-settings aiomqtt httpx structlog numpy
+
+# Copy application code
+COPY app/ /app/app/
+
+# Copy entrypoint
+COPY run.sh /run.sh
+RUN chmod a+x /run.sh
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+    CMD curl -sf http://127.0.0.1:8099/health || exit 1
+
+CMD [ "/run.sh" ]

@@ -33,9 +33,8 @@ COPY requirements.txt /app/requirements.txt
 RUN pip3 install --no-cache-dir --break-system-packages --prefer-binary \
     -r /app/requirements.txt
 
-# Copy application code and models
+# Copy application code
 COPY app/ /app/app/
-COPY models/ /app/models/
 
 # Copy entrypoint
 COPY run.sh /run.sh

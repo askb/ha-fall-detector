@@ -60,14 +60,18 @@ class MoveNetEstimator(PoseEstimator):
         self._ready = False
 
     async def initialize(self) -> None:
-        """Load the TFLite model."""
+        """Load the TFLite model, downloading from TF Hub if necessary."""
+        self._model_dir.mkdir(parents=True, exist_ok=True)
         model_path = self._model_dir / f"{self._model_variant}.tflite"
+
+        if not model_path.exists():
+            await self._download_model(model_path)
 
         if not model_path.exists():
             logger.warning(
                 "model_not_found",
                 path=str(model_path),
-                message="Model file not found. Using fallback aspect-ratio-only detection.",
+                message="Model file not found after download attempt. Using fallback.",
             )
             self._ready = False
             return
@@ -81,6 +85,31 @@ class MoveNetEstimator(PoseEstimator):
         except Exception:
             logger.exception("pose_model_load_failed", variant=self._model_variant)
             self._ready = False
+
+    async def _download_model(self, model_path: Path) -> None:
+        """Download TFLite model from TF Hub."""
+        url = self.MODEL_URLS.get(self._model_variant)
+        if not url:
+            logger.error("unknown_model_variant", variant=self._model_variant)
+            return
+
+        logger.info("downloading_model", variant=self._model_variant, url=url)
+        try:
+            import httpx
+
+            async with httpx.AsyncClient(follow_redirects=True, timeout=120.0) as client:
+                response = await client.get(url)
+                if response.status_code == 200:
+                    model_path.write_bytes(response.content)
+                    logger.info(
+                        "model_downloaded",
+                        variant=self._model_variant,
+                        size_mb=round(len(response.content) / 1024 / 1024, 1),
+                    )
+                else:
+                    logger.error("model_download_failed", status=response.status_code)
+        except Exception:
+            logger.exception("model_download_error", variant=self._model_variant)
 
     async def estimate_pose(self, frame: np.ndarray) -> PoseSummary | None:
         """Run MoveNet inference on a frame."""

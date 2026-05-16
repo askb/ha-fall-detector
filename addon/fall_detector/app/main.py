@@ -20,7 +20,12 @@ import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.responses import JSONResponse
 
+from app.alerts.manager import AlertManager
+from app.alerts.mqtt_publisher import MqttPublisher
 from app.config.settings import Settings
+from app.inference.detection_coordinator import DetectionCoordinator
+from app.inference.frame_source import FrigateFrameSource
+from app.inference.pose_estimator import MoveNetEstimator
 from app.models import (
     AlertAction,
     CameraState,
@@ -47,21 +52,37 @@ class AppState:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self.start_time: float = time.monotonic()
-        self.cameras: dict[str, CameraState] = {}
-        self.recent_events: deque[FallDetectionEvent] = deque(
-            maxlen=MAX_RECENT_EVENTS
-        )
-        self.total_events: int = 0
-        self.notifications_muted: bool = False
-        self._monitoring_tasks: list[asyncio.Task] = []  # type: ignore[type-arg]
-        self._shutdown_event = asyncio.Event()
         self.logger = get_logger("app.state")
 
-    # -- helpers -------------------------------------------------------------
+        # Core components (created in start())
+        self.coordinator: DetectionCoordinator | None = None
+        self.mqtt_publisher: MqttPublisher | None = None
+        self.alert_manager: AlertManager | None = None
+        self.frame_source: FrigateFrameSource | None = None
+
+    # -- properties delegating to coordinator --------------------------------
 
     @property
     def uptime(self) -> float:
         return time.monotonic() - self.start_time
+
+    @property
+    def cameras(self) -> dict[str, CameraState]:
+        if self.coordinator:
+            return self.coordinator.camera_states
+        return {}
+
+    @property
+    def recent_events(self) -> list[FallDetectionEvent]:
+        if self.coordinator:
+            return self.coordinator.recent_events
+        return []
+
+    @property
+    def total_events(self) -> int:
+        if self.coordinator:
+            return self.coordinator._total_events
+        return 0
 
     @property
     def active_alerts(self) -> int:
@@ -73,95 +94,117 @@ class AppState:
 
     @property
     def last_event(self) -> FallDetectionEvent | None:
-        return self.recent_events[-1] if self.recent_events else None
+        events = self.recent_events
+        return events[-1] if events else None
+
+    @property
+    def notifications_muted(self) -> bool:
+        if self.coordinator:
+            return self.coordinator.notifications_muted
+        return False
+
+    @notifications_muted.setter
+    def notifications_muted(self, value: bool) -> None:
+        if self.coordinator:
+            self.coordinator.notifications_muted = value
 
     def get_camera(self, name: str) -> CameraState:
-        if name not in self.cameras:
+        cams = self.cameras
+        if name not in cams:
             raise HTTPException(status_code=404, detail=f"Camera '{name}' not found")
-        return self.cameras[name]
+        return cams[name]
 
     # -- lifecycle -----------------------------------------------------------
 
     async def start(self) -> None:
-        """Initialise camera states and start background monitoring tasks."""
-        for cam_name in self.settings.monitored_cameras:
-            self.cameras[cam_name] = CameraState(camera_name=cam_name)
-            self.logger.info("camera_registered", camera=cam_name)
-
-        self._monitoring_tasks.append(
-            asyncio.create_task(self._camera_monitor_loop())
+        """Create components, wire callbacks, and start the detection pipeline."""
+        # Frame source
+        self.frame_source = FrigateFrameSource(
+            frigate_url=self.settings.frigate_url,
         )
+
+        # Pose estimator
+        pose_estimator = MoveNetEstimator(
+            model_variant=self.settings.pose_backend,
+            model_dir=f"{self.settings.fall_detector_data_path}/models",
+        )
+
+        # Detection coordinator
+        self.coordinator = DetectionCoordinator(
+            settings=self.settings,
+            frame_source=self.frame_source,
+            pose_estimator=pose_estimator,
+        )
+
+        # MQTT publisher
+        self.mqtt_publisher = MqttPublisher(
+            host=self.settings.mqtt_host,
+            port=self.settings.mqtt_port,
+            username=self.settings.mqtt_username or None,
+            password=self.settings.mqtt_password or None,
+        )
+
+        # Alert manager
+        self.alert_manager = AlertManager(
+            cooldown_seconds=self.settings.alert_cooldown_seconds,
+        )
+
+        # Wire callbacks
+        async def on_alert(event: FallDetectionEvent) -> None:
+            """Handle confirmed fall alerts."""
+            if self.mqtt_publisher:
+                await self.mqtt_publisher.publish_fall_event(event)
+                await self.mqtt_publisher.notify_alert(event, escalation_level=0)
+            if self.alert_manager:
+                await self.alert_manager.process_alert(event)
+
+        async def on_event(event: FallDetectionEvent) -> None:
+            """Handle all detection events."""
+            if self.mqtt_publisher:
+                await self.mqtt_publisher.publish_fall_event(event)
+
+        async def on_escalation(event: FallDetectionEvent, level: int) -> None:
+            """Handle escalation notifications."""
+            if self.mqtt_publisher:
+                await self.mqtt_publisher.notify_alert(event, escalation_level=level)
+
+        self.coordinator.on_alert(on_alert)
+        self.coordinator.on_event(on_event)
+        self.alert_manager.on_notification(on_escalation)
+
+        # Connect MQTT
+        try:
+            await self.mqtt_publisher.connect()
+            await self.mqtt_publisher.publish_availability(online=True)
+        except Exception:
+            self.logger.exception("mqtt_connect_failed")
+
+        # Start detection pipeline
+        await self.coordinator.start()
+
         self.logger.info(
-            "monitoring_started",
+            "pipeline_started",
             cameras=len(self.cameras),
-            sample_rate=self.settings.frame_sample_rate,
+            pose_backend=self.settings.pose_backend,
+            frigate_url=self.settings.frigate_url,
         )
 
     async def stop(self) -> None:
-        """Gracefully cancel background tasks."""
-        self._shutdown_event.set()
-        for task in self._monitoring_tasks:
-            task.cancel()
-        await asyncio.gather(*self._monitoring_tasks, return_exceptions=True)
-        self._monitoring_tasks.clear()
-        self.logger.info("monitoring_stopped")
+        """Gracefully shut down all components."""
+        if self.coordinator:
+            await self.coordinator.stop()
 
-    # -- background tasks ----------------------------------------------------
-
-    async def _camera_monitor_loop(self) -> None:
-        """Placeholder monitoring loop.
-
-        The full implementation will subscribe to Frigate MQTT events,
-        pull snapshots, run pose estimation, and feed the detection
-        state-machine.  This skeleton keeps the add-on responsive while
-        those subsystems are built out in subsequent modules.
-        """
-        interval = 1.0 / max(self.settings.frame_sample_rate, 0.1)
-        while not self._shutdown_event.is_set():
-            for cam_name, cam_state in self.cameras.items():
-                if not cam_state.monitoring_active:
-                    continue
-                cam_state.frame_count += 1
-
-                # Cooldown expiry check
-                if (
-                    cam_state.cooldown_until
-                    and datetime.utcnow() >= cam_state.cooldown_until
-                ):
-                    cam_state.cooldown_until = None
-                    self.logger.debug("cooldown_expired", camera=cam_name)
-
+        if self.mqtt_publisher:
             try:
-                await asyncio.wait_for(
-                    self._shutdown_event.wait(), timeout=interval
-                )
-                break
-            except asyncio.TimeoutError:
-                continue
+                await self.mqtt_publisher.publish_availability(online=False)
+                await self.mqtt_publisher.disconnect()
+            except Exception:
+                pass
 
-    # -- event recording -----------------------------------------------------
+        if self.frame_source:
+            await self.frame_source.close()
 
-    def record_event(self, event: FallDetectionEvent) -> None:
-        """Persist an event to the recent-events ring buffer."""
-        self.recent_events.append(event)
-        self.total_events += 1
-
-        cam = self.cameras.get(event.camera)
-        if cam is not None:
-            cam.last_fall_event = event
-            if event.stage == DetectionStage.CONFIRMED_FALL:
-                cam.active_alert = True
-                cam.alert_acknowledged = False
-                cam.last_alert_time = event.timestamp
-                cam.cooldown_until = event.timestamp + timedelta(
-                    seconds=self.settings.alert_cooldown_seconds
-                )
-        self.logger.info(
-            "event_recorded",
-            event_id=event.event_id,
-            camera=event.camera,
-            stage=event.stage,
-        )
+        self.logger.info("shutdown_complete")
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +336,10 @@ async def test_alert(
     state: AppState = Depends(get_state),
 ) -> FallDetectionEvent:
     """Fire a synthetic fall alert for testing notifications."""
+    if state.coordinator and camera in state.cameras:
+        return await state.coordinator.create_test_alert(camera)
+
+    # Fallback for cameras not in coordinator
     event = FallDetectionEvent(
         camera=camera,
         confidence=0.95,
@@ -312,14 +359,6 @@ async def test_alert(
         ),
         reason_codes=[ReasonCode.RAPID_DESCENT, ReasonCode.PRONE_DWELL],
     )
-
-    # If the camera exists in state, record against it
-    if camera in state.cameras:
-        state.record_event(event)
-    else:
-        state.recent_events.append(event)
-        state.total_events += 1
-
     state.logger.warning("test_alert_fired", camera=camera, event_id=event.event_id)
     return event
 
@@ -334,28 +373,30 @@ async def alert_action(
     if action == AlertAction.ACKNOWLEDGE:
         if camera is None:
             raise HTTPException(400, "camera query parameter required for acknowledge")
-        cam = state.get_camera(camera)
-        cam.alert_acknowledged = True
+        if state.coordinator:
+            state.coordinator.acknowledge_alert(camera)
         state.logger.info("alert_acknowledged", camera=camera)
         return JSONResponse(content={"result": "acknowledged", "camera": camera})
 
     if action == AlertAction.MUTE:
         state.notifications_muted = True
+        if state.alert_manager:
+            state.alert_manager.mute()
         state.logger.info("notifications_muted")
         return JSONResponse(content={"result": "muted"})
 
     if action == AlertAction.UNMUTE:
         state.notifications_muted = False
+        if state.alert_manager:
+            state.alert_manager.unmute()
         state.logger.info("notifications_unmuted")
         return JSONResponse(content={"result": "unmuted"})
 
     if action == AlertAction.RESET:
-        for cam in state.cameras.values():
-            cam.active_alert = False
-            cam.alert_acknowledged = False
-            cam.consecutive_fall_frames = 0
-            cam.fall_candidate_start = None
-            cam.cooldown_until = None
+        if state.coordinator:
+            state.coordinator.reset_all()
+        if state.alert_manager:
+            state.alert_manager.reset()
         state.logger.info("alerts_reset")
         return JSONResponse(content={"result": "all_alerts_reset"})
 

@@ -5,8 +5,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from custom_components.fall_detector.const import DOMAIN
-
 
 @pytest.fixture
 def mock_api():
@@ -15,9 +13,7 @@ def mock_api():
         "custom_components.fall_detector.coordinator.FallDetectorApi",
     ) as mock:
         api = mock.return_value
-        api.async_get_health = AsyncMock(
-            return_value={"status": "ok", "version": "0.1.0"}
-        )
+        api.async_get_health = AsyncMock(return_value={"status": "ok", "version": "0.1.0"})
         api.async_get_status = AsyncMock(
             return_value={
                 "online": True,
@@ -54,6 +50,7 @@ def mock_api():
 def mock_config_entry():
     """Create a mock config entry."""
     from unittest.mock import MagicMock
+
     entry = MagicMock()
     entry.entry_id = "test_entry_id"
     entry.data = {

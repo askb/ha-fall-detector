@@ -4,7 +4,7 @@
   "mqtt_port": 1883,
   "mqtt_username": "",
   "mqtt_password": "",
-  "monitored_cameras": ["front_camera"],
+  "monitored_cameras": ["front_camera", "eufy_indoor"],
   "frame_sample_rate": 1.0,
   "person_gate_required": true,
   "pose_backend": "yolo_pose_nano",

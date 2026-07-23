@@ -3,7 +3,7 @@
 ---
 name: "Fall Detector"
 description: "AI-powered elderly fall detection using Frigate camera feeds"
-version: "0.1.0"
+version: "0.2.0"
 slug: "fall_detector"
 url: "https://github.com/askb/ha-fall-detector"
 arch:
@@ -24,6 +24,7 @@ ports:
 ports_description:
   8099/tcp: "Web API (internal only via ingress)"
 options:
+  camera_source: "home_assistant"
   frigate_url: "http://ccab4aaf-frigate-fa:5000"
   mqtt_host: "core-mosquitto"
   mqtt_port: 1883
@@ -42,6 +43,9 @@ options:
   retain_debug_frames: false
   log_level: "info"
 schema:
+  camera_source: list(frigate|home_assistant|rtsp)
+  rtsp_streams:
+    - str?
   frigate_url: url
   mqtt_host: str
   mqtt_port: port

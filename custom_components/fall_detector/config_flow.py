@@ -7,7 +7,6 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
@@ -23,7 +22,6 @@ from .const import (
     CONF_FALL_CONFIRMATION,
     CONF_FRIGATE_URL,
     CONF_MONITORED_CAMERAS,
-    CONF_NOTIFICATION_TARGETS,
     CONF_QUIET_HOURS_END,
     CONF_QUIET_HOURS_START,
     CONF_RECOVERY_WINDOW,
@@ -128,15 +126,10 @@ class FallDetectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle camera selection."""
         if user_input is not None:
-            self._data[CONF_MONITORED_CAMERAS] = user_input.get(
-                CONF_MONITORED_CAMERAS, []
-            )
+            self._data[CONF_MONITORED_CAMERAS] = user_input.get(CONF_MONITORED_CAMERAS, [])
             return self._create_entry()
 
-        camera_options = [
-            selector.SelectOptionDict(value=cam, label=cam)
-            for cam in self._available_cameras
-        ]
+        camera_options = [selector.SelectOptionDict(value=cam, label=cam) for cam in self._available_cameras]
 
         return self.async_show_form(
             step_id="cameras",

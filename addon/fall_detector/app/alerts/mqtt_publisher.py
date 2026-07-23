@@ -3,8 +3,8 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
-from datetime import datetime
 from typing import Any
 
 import aiomqtt
@@ -51,10 +51,8 @@ class MqttPublisher:
     async def disconnect(self) -> None:
         """Close MQTT connection."""
         if self._client:
-            try:
+            with contextlib.suppress(Exception):
                 await self._client.__aexit__(None, None, None)
-            except Exception:
-                pass
             self._client = None
 
     async def publish_fall_event(self, event: FallDetectionEvent) -> None:

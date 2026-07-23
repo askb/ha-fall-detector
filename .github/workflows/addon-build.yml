@@ -6,11 +6,10 @@ name: Add-on Build
 on:
   push:
     branches: [main]
-    paths:
-      - "addon/**"
-  push_tags:
     tags:
       - "v*"
+    paths:
+      - "addon/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

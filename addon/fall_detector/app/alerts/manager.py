@@ -4,9 +4,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
-from datetime import datetime, timedelta
-from typing import Any
+from datetime import datetime
 
 from app.models import FallDetectionEvent
 from app.utils.logging import get_logger

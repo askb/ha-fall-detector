@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -48,6 +50,7 @@ async def async_setup_entry(
 # Helper: shared device_info builders
 # ---------------------------------------------------------------------------
 
+
 def _system_device_info() -> dict:
     """Return device info for the global fall detector device."""
     return {
@@ -74,9 +77,7 @@ def _camera_device_info(camera_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-class FallDetectorActiveAlertsSensor(
-    CoordinatorEntity[FallDetectorCoordinator], SensorEntity
-):
+class FallDetectorActiveAlertsSensor(CoordinatorEntity[FallDetectorCoordinator], SensorEntity):
     """Sensor showing the number of currently active fall alerts."""
 
     _attr_has_entity_name = True
@@ -99,9 +100,7 @@ class FallDetectorActiveAlertsSensor(
         return self.coordinator.data.active_alerts
 
 
-class FallDetectorLastEventSensor(
-    CoordinatorEntity[FallDetectorCoordinator], SensorEntity
-):
+class FallDetectorLastEventSensor(CoordinatorEntity[FallDetectorCoordinator], SensorEntity):
     """Sensor showing the timestamp of the last fall event."""
 
     _attr_has_entity_name = True
@@ -145,9 +144,7 @@ class FallDetectorLastEventSensor(
 # ---------------------------------------------------------------------------
 
 
-class CameraFallConfidenceSensor(
-    CoordinatorEntity[FallDetectorCoordinator], SensorEntity
-):
+class CameraFallConfidenceSensor(CoordinatorEntity[FallDetectorCoordinator], SensorEntity):
     """Sensor showing the latest fall-detection confidence for a camera."""
 
     _attr_has_entity_name = True
@@ -156,9 +153,7 @@ class CameraFallConfidenceSensor(
     _attr_native_unit_of_measurement = PERCENTAGE
     _attr_suggested_display_precision = 1
 
-    def __init__(
-        self, coordinator: FallDetectorCoordinator, camera_name: str
-    ) -> None:
+    def __init__(self, coordinator: FallDetectorCoordinator, camera_name: str) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._camera_name = camera_name
@@ -174,18 +169,14 @@ class CameraFallConfidenceSensor(
         return self.coordinator.data.get_camera_confidence(self._camera_name)
 
 
-class CameraLastFallTimeSensor(
-    CoordinatorEntity[FallDetectorCoordinator], SensorEntity
-):
+class CameraLastFallTimeSensor(CoordinatorEntity[FallDetectorCoordinator], SensorEntity):
     """Sensor showing the timestamp of the last fall detected by a camera."""
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:clock-outline"
 
-    def __init__(
-        self, coordinator: FallDetectorCoordinator, camera_name: str
-    ) -> None:
+    def __init__(self, coordinator: FallDetectorCoordinator, camera_name: str) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._camera_name = camera_name
@@ -201,19 +192,15 @@ class CameraLastFallTimeSensor(
         return self.coordinator.data.get_camera_last_fall_time(self._camera_name)
 
 
-class CameraMonitorStatusSensor(
-    CoordinatorEntity[FallDetectorCoordinator], SensorEntity
-):
+class CameraMonitorStatusSensor(CoordinatorEntity[FallDetectorCoordinator], SensorEntity):
     """Sensor showing the monitoring status of a camera."""
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = ["monitoring", "paused", "error", "unknown"]
+    _attr_options: ClassVar[list[str]] = ["monitoring", "paused", "error", "unknown"]
     _attr_icon = "mdi:cctv"
 
-    def __init__(
-        self, coordinator: FallDetectorCoordinator, camera_name: str
-    ) -> None:
+    def __init__(self, coordinator: FallDetectorCoordinator, camera_name: str) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._camera_name = camera_name
@@ -246,7 +233,5 @@ class CameraMonitorStatusSensor(
         attrs: dict = {}
         if state.get("error"):
             attrs["error_message"] = state.get("error")
-        attrs["alerts_enabled"] = self.coordinator.data.is_camera_alerts_enabled(
-            self._camera_name
-        )
+        attrs["alerts_enabled"] = self.coordinator.data.is_camera_alerts_enabled(self._camera_name)
         return attrs

@@ -1,15 +1,12 @@
 """Tests for data models."""
 # SPDX-License-Identifier: Apache-2.0
 
-from datetime import datetime
-
 from app.models import (
     CameraState,
     DetectionStage,
     FallDetectionEvent,
     HealthResponse,
     Keypoint,
-    MotionSummary,
     PoseSummary,
     ReasonCode,
     SystemStatus,

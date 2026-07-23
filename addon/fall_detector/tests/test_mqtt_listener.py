@@ -1,10 +1,7 @@
 """Tests for Frigate MQTT event parsing."""
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
-
 from app.frigate.mqtt_listener import FrigateEventData
-
 
 SAMPLE_FRIGATE_EVENT = {
     "type": "new",

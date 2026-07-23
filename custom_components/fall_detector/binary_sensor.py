@@ -32,9 +32,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class FallDetectorOnlineSensor(
-    CoordinatorEntity[FallDetectorCoordinator], BinarySensorEntity
-):
+class FallDetectorOnlineSensor(CoordinatorEntity[FallDetectorCoordinator], BinarySensorEntity):
     """Binary sensor for Fall Detector add-on online status."""
 
     _attr_has_entity_name = True
@@ -60,17 +58,13 @@ class FallDetectorOnlineSensor(
         return self.coordinator.data.online
 
 
-class CameraFallDetectedSensor(
-    CoordinatorEntity[FallDetectorCoordinator], BinarySensorEntity
-):
+class CameraFallDetectedSensor(CoordinatorEntity[FallDetectorCoordinator], BinarySensorEntity):
     """Binary sensor for fall detection on a specific camera."""
 
     _attr_has_entity_name = True
     _attr_device_class = BinarySensorDeviceClass.SAFETY
 
-    def __init__(
-        self, coordinator: FallDetectorCoordinator, camera_name: str
-    ) -> None:
+    def __init__(self, coordinator: FallDetectorCoordinator, camera_name: str) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._camera_name = camera_name

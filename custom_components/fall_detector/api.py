@@ -58,7 +58,8 @@ class FallDetectorApi:
         return await self._post("/alert/test", json={"camera": camera_name})
 
     async def async_acknowledge_alert(
-        self, camera_name: str | None = None,
+        self,
+        camera_name: str | None = None,
     ) -> dict[str, Any]:
         """Acknowledge an alert."""
         payload = {"camera": camera_name} if camera_name else {}
@@ -97,13 +98,9 @@ class FallDetectorApi:
             response.raise_for_status()
             return response.json()
         except httpx.ConnectError as err:
-            raise FallDetectorConnectionError(
-                f"Cannot connect to Fall Detector add-on at {self._base_url}"
-            ) from err
+            raise FallDetectorConnectionError(f"Cannot connect to Fall Detector add-on at {self._base_url}") from err
         except httpx.HTTPStatusError as err:
-            raise FallDetectorApiError(
-                f"API error {err.response.status_code}: {err.response.text}"
-            ) from err
+            raise FallDetectorApiError(f"API error {err.response.status_code}: {err.response.text}") from err
         except Exception as err:
             raise FallDetectorApiError(f"Unexpected error: {err}") from err
 
@@ -115,12 +112,8 @@ class FallDetectorApi:
             response.raise_for_status()
             return response.json()
         except httpx.ConnectError as err:
-            raise FallDetectorConnectionError(
-                f"Cannot connect to Fall Detector add-on at {self._base_url}"
-            ) from err
+            raise FallDetectorConnectionError(f"Cannot connect to Fall Detector add-on at {self._base_url}") from err
         except httpx.HTTPStatusError as err:
-            raise FallDetectorApiError(
-                f"API error {err.response.status_code}: {err.response.text}"
-            ) from err
+            raise FallDetectorApiError(f"API error {err.response.status_code}: {err.response.text}") from err
         except Exception as err:
             raise FallDetectorApiError(f"Unexpected error: {err}") from err

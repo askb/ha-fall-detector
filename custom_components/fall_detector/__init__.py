@@ -5,17 +5,15 @@ from __future__ import annotations
 
 import logging
 
+import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
-import voluptuous as vol
 
 from .const import (
     ATTR_CAMERA,
     DOMAIN,
     EVENT_ALERT_ACKNOWLEDGED,
-    EVENT_FALL_DETECTED,
-    EVENT_PERSON_RECOVERED,
     PLATFORMS,
     SERVICE_ACKNOWLEDGE_ALERT,
     SERVICE_MUTE_NOTIFICATIONS,
@@ -28,13 +26,9 @@ from .coordinator import FallDetectorCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-SERVICE_CAMERA_SCHEMA = vol.Schema(
-    {vol.Required(ATTR_CAMERA): cv.string}
-)
+SERVICE_CAMERA_SCHEMA = vol.Schema({vol.Required(ATTR_CAMERA): cv.string})
 
-SERVICE_OPTIONAL_CAMERA_SCHEMA = vol.Schema(
-    {vol.Optional(ATTR_CAMERA): cv.string}
-)
+SERVICE_OPTIONAL_CAMERA_SCHEMA = vol.Schema({vol.Optional(ATTR_CAMERA): cv.string})
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

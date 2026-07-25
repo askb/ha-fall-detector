@@ -216,6 +216,11 @@ class RtspFrameSource(FrameSource):
     async def close(self) -> None:
         import asyncio
 
+        # Bounded wait: if a read is stuck in cap.read() on a stalled
+        # stream, don't hang shutdown — the process is exiting anyway
         with contextlib.suppress(Exception):
-            await asyncio.get_running_loop().run_in_executor(self._executor, self._release_all)
+            await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(self._executor, self._release_all),
+                timeout=10.0,
+            )
         self._executor.shutdown(wait=False)

@@ -3,14 +3,10 @@
 
 from datetime import datetime, timedelta
 
-import pytest
-
-from app.inference.fall_scorer import FallScorer, ScoringConfig
+from app.inference.fall_scorer import FallScorer
 from app.models import (
     CameraState,
     DetectionStage,
-    Keypoint,
-    MotionSummary,
     PoseSummary,
     ReasonCode,
 )

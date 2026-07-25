@@ -6,6 +6,7 @@ from __future__ import annotations
 import abc
 import math
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 
@@ -16,10 +17,23 @@ logger = get_logger(__name__)
 
 # MoveNet keypoint indices
 KEYPOINT_NAMES = [
-    "nose", "left_eye", "right_eye", "left_ear", "right_ear",
-    "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
-    "left_wrist", "right_wrist", "left_hip", "right_hip",
-    "left_knee", "right_knee", "left_ankle", "right_ankle",
+    "nose",
+    "left_eye",
+    "right_eye",
+    "left_ear",
+    "right_ear",
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip",
+    "left_knee",
+    "right_knee",
+    "left_ankle",
+    "right_ankle",
 ]
 
 
@@ -42,12 +56,16 @@ class PoseEstimator(abc.ABC):
 class MoveNetEstimator(PoseEstimator):
     """MoveNet Lightning/Thunder TFLite pose estimator."""
 
-    MODEL_URLS = {
-        "movenet_lightning": "https://tfhub.dev/google/lite-model/movenet/singlepose/lightning/tflite/int8/4?lite-format=tflite",
-        "movenet_thunder": "https://tfhub.dev/google/lite-model/movenet/singlepose/thunder/tflite/int8/4?lite-format=tflite",
+    # tfhub.dev is dead (404 since 2024); use the community GitHub mirror.
+    MODEL_URLS: ClassVar[dict[str, str]] = {
+        "movenet_lightning": "https://github.com/yuanoook/tf-movenet-files-hub/raw/32fa5c49223b8ff4279a46b3e6ff211f2ca9f31e/singlepose-lightning-tflite-int8.tflite",
+        "movenet_thunder": "https://github.com/yuanoook/tf-movenet-files-hub/raw/32fa5c49223b8ff4279a46b3e6ff211f2ca9f31e/singlepose-thunder-tflite-int8.tflite",
     }
 
-    INPUT_SIZES = {
+    # Models pre-baked into the Docker image at build time (no network needed)
+    BAKED_MODEL_DIR = Path("/app/models")
+
+    INPUT_SIZES: ClassVar[dict[str, int]] = {
         "movenet_lightning": 192,
         "movenet_thunder": 256,
     }
@@ -65,7 +83,14 @@ class MoveNetEstimator(PoseEstimator):
         model_path = self._model_dir / f"{self._model_variant}.tflite"
 
         if not model_path.exists():
-            await self._download_model(model_path)
+            baked = self.BAKED_MODEL_DIR / f"{self._model_variant}.tflite"
+            if baked.is_file():
+                import shutil
+
+                shutil.copy(baked, model_path)
+                logger.info("model_copied_from_image", variant=self._model_variant)
+            else:
+                await self._download_model(model_path)
 
         if not model_path.exists():
             logger.warning(
@@ -77,7 +102,11 @@ class MoveNetEstimator(PoseEstimator):
             return
 
         try:
-            import tflite_runtime.interpreter as tflite
+            try:
+                import tflite_runtime.interpreter as tflite
+            except ImportError:
+                # ai-edge-litert is the maintained successor to tflite-runtime
+                from ai_edge_litert import interpreter as tflite
             self._interpreter = tflite.Interpreter(model_path=str(model_path))
             self._interpreter.allocate_tensors()
             self._ready = True
@@ -119,13 +148,17 @@ class MoveNetEstimator(PoseEstimator):
         try:
             import cv2
 
-            # Resize frame to model input size
-            input_image = cv2.resize(frame, (self._input_size, self._input_size))
-            input_image = np.expand_dims(input_image, axis=0).astype(np.int32)
-
-            # Run inference
+            # Resize frame to model input size and match the model's input dtype
+            # (int8-quantised MoveNet expects uint8; float variants expect float32)
             input_details = self._interpreter.get_input_details()
             output_details = self._interpreter.get_output_details()
+            input_image = cv2.resize(frame, (self._input_size, self._input_size))
+            input_image = np.expand_dims(input_image, axis=0)
+            input_dtype = input_details[0]["dtype"]
+            if input_dtype == np.float32:
+                input_image = input_image.astype(np.float32)
+            else:
+                input_image = input_image.astype(input_dtype)
             self._interpreter.set_tensor(input_details[0]["index"], input_image)
             self._interpreter.invoke()
 
@@ -229,14 +262,27 @@ class YoloPoseEstimator(PoseEstimator):
     """
 
     # YOLO-Pose uses COCO keypoint order (same 17 keypoints as MoveNet)
-    YOLO_KEYPOINT_NAMES = [
-        "nose", "left_eye", "right_eye", "left_ear", "right_ear",
-        "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
-        "left_wrist", "right_wrist", "left_hip", "right_hip",
-        "left_knee", "right_knee", "left_ankle", "right_ankle",
+    YOLO_KEYPOINT_NAMES: ClassVar[list[str]] = [
+        "nose",
+        "left_eye",
+        "right_eye",
+        "left_ear",
+        "right_ear",
+        "left_shoulder",
+        "right_shoulder",
+        "left_elbow",
+        "right_elbow",
+        "left_wrist",
+        "right_wrist",
+        "left_hip",
+        "right_hip",
+        "left_knee",
+        "right_knee",
+        "left_ankle",
+        "right_ankle",
     ]
 
-    MODEL_VARIANTS = {
+    MODEL_VARIANTS: ClassVar[dict[str, str]] = {
         "yolo_pose_nano": "yolo11n-pose.pt",
         "yolo_pose_small": "yolo11s-pose.pt",
         "yolo_pose_medium": "yolo11m-pose.pt",
@@ -273,9 +319,7 @@ class YoloPoseEstimator(PoseEstimator):
                     self._gpu_name = None
 
             # Determine model filename
-            model_file = self.MODEL_VARIANTS.get(
-                self._model_variant, "yolo11n-pose.pt"
-            )
+            model_file = self.MODEL_VARIANTS.get(self._model_variant, "yolo11n-pose.pt")
             model_path = self._model_dir / model_file
 
             # YOLO auto-downloads if not present
@@ -328,12 +372,14 @@ class YoloPoseEstimator(PoseEstimator):
                 x, y, conf = kp_data[i]
                 # YOLO outputs pixel coords; normalize to [0, 1]
                 h, w = frame.shape[:2]
-                keypoints.append(Keypoint(
-                    name=name,
-                    x=float(x / w) if w > 0 else 0.0,
-                    y=float(y / h) if h > 0 else 0.0,
-                    confidence=float(conf),
-                ))
+                keypoints.append(
+                    Keypoint(
+                        name=name,
+                        x=float(x / w) if w > 0 else 0.0,
+                        y=float(y / h) if h > 0 else 0.0,
+                        confidence=float(conf),
+                    )
+                )
 
             return self._build_pose_summary(keypoints, person_conf)
 
@@ -344,15 +390,9 @@ class YoloPoseEstimator(PoseEstimator):
     def is_ready(self) -> bool:
         return self._ready
 
-    def _build_pose_summary(
-        self, keypoints: list[Keypoint], person_confidence: float = 0.0
-    ) -> PoseSummary:
+    def _build_pose_summary(self, keypoints: list[Keypoint], person_confidence: float = 0.0) -> PoseSummary:
         """Compute derived metrics from YOLO keypoints."""
-        avg_kp_conf = (
-            sum(k.confidence for k in keypoints) / len(keypoints)
-            if keypoints
-            else 0.0
-        )
+        avg_kp_conf = sum(k.confidence for k in keypoints) / len(keypoints) if keypoints else 0.0
 
         torso_angle = MoveNetEstimator._calculate_torso_angle(keypoints)
         is_upright = torso_angle is not None and abs(torso_angle) > 45

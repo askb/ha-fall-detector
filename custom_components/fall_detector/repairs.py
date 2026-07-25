@@ -33,7 +33,8 @@ def remove_addon_unreachable_issue(hass: HomeAssistant) -> None:
 
 
 def create_camera_stream_stale_issue(
-    hass: HomeAssistant, camera_name: str,
+    hass: HomeAssistant,
+    camera_name: str,
 ) -> None:
     """Create a repair issue when a camera stream is stale."""
     ir.async_create_issue(
@@ -49,14 +50,17 @@ def create_camera_stream_stale_issue(
 
 
 def remove_camera_stream_stale_issue(
-    hass: HomeAssistant, camera_name: str,
+    hass: HomeAssistant,
+    camera_name: str,
 ) -> None:
     """Remove the camera stream stale repair issue."""
     ir.async_delete_issue(hass, DOMAIN, f"camera_stale_{camera_name}")
 
 
 def create_high_false_positive_issue(
-    hass: HomeAssistant, camera_name: str, rate: float,
+    hass: HomeAssistant,
+    camera_name: str,
+    rate: float,
 ) -> None:
     """Create a repair issue for high false positive rate."""
     ir.async_create_issue(

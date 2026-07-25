@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     Supervisor, with environment-variable overrides for local development.
     """
 
+    # --- Camera source ---
+    # frigate: Frigate snapshot API | home_assistant: any HA camera entity
+    # rtsp: direct RTSP/webcam/video-file URLs (local testing)
+    camera_source: Literal["frigate", "home_assistant", "rtsp"] = "frigate"
+    ha_url: str = "http://supervisor/core"
+    rtsp_streams: list[str] = Field(default_factory=list)  # "name|url" pairs
+
     # --- Frigate integration ---
     frigate_url: str = "http://ccab4aaf-frigate:5000"
     mqtt_host: str = "core-mosquitto"
@@ -64,7 +71,7 @@ class Settings(BaseSettings):
     fall_detector_media_path: str = "/media/fall_detector"
 
     # --- Static metadata ---
-    version: str = "0.1.0"
+    version: str = "0.2.0"
 
     model_config = {
         "env_prefix": "FALL_DETECTOR_",
@@ -101,9 +108,7 @@ class Settings(BaseSettings):
             A fully validated ``Settings`` instance.
         """
         if config_path is None:
-            config_path = os.environ.get(
-                "FALL_DETECTOR_CONFIG_PATH", "/data/options.json"
-            )
+            config_path = os.environ.get("FALL_DETECTOR_CONFIG_PATH", "/data/options.json")
 
         options_file = Path(config_path)
         addon_options: dict = {}
@@ -113,9 +118,15 @@ class Settings(BaseSettings):
                 addon_options = json.load(fh)
 
         # Normalise keys: HA options use snake_case already but let's be safe
-        normalised = {
-            key.lower().replace("-", "_"): value
-            for key, value in addon_options.items()
-        }
+        normalised = {key.lower().replace("-", "_"): value for key, value in addon_options.items()}
 
         return cls(**normalised)
+
+    def rtsp_stream_map(self) -> dict[str, str]:
+        """Parse ``name|url`` entries into a dict."""
+        result: dict[str, str] = {}
+        for entry in self.rtsp_streams:
+            name, sep, url = entry.partition("|")
+            if sep and name.strip() and url.strip():
+                result[name.strip()] = url.strip()
+        return result

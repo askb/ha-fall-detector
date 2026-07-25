@@ -9,10 +9,14 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange)](https://hacs.xyz/)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://pre-commit.com/)
 
-**AI-powered fall detection for Home Assistant using your existing Frigate cameras.**
+**AI-powered fall detection for Home Assistant — works with any camera.**
 
-HA Fall Detector watches Frigate camera feeds for human falls using real-time
-pose estimation. When a fall is detected and confirmed, it publishes alerts
+HA Fall Detector watches camera feeds for human falls using real-time
+pose estimation. Frames can come from **any Home Assistant camera entity**
+(`camera_source: home_assistant`, the default — ONVIF, RTSP, ESPHome, Ring,
+Eufy, ...), from **Frigate** (`camera_source: frigate`), or directly from
+**RTSP/webcam/video-file URLs** (`camera_source: rtsp`, useful for local
+testing). When a fall is detected and confirmed, it publishes alerts
 through MQTT and exposes rich entities in Home Assistant so you can build
 automations — push notifications, sirens, lights, or calls for help.
 
@@ -197,11 +201,11 @@ Before installing HA Fall Detector, you need:
 
 1. **Home Assistant OS** (HAOS) or **Home Assistant Supervised** — add-ons
    require the Supervisor
-2. **Frigate NVR** — installed and running with at least one camera configured
-   for `person` detection
-3. **MQTT Broker** — Mosquitto (the HA add-on works perfectly) with Frigate
-   publishing events to it
-4. **At least one camera** with a reasonable view of the area to monitor
+2. **MQTT Broker** — Mosquitto (the HA add-on works perfectly)
+3. **At least one camera** with a reasonable view of the area to monitor —
+   any camera integrated in Home Assistant works (default
+   `camera_source: home_assistant`); Frigate is **optional** and only needed
+   for `camera_source: frigate`
 
 ### Step 1: Install the Fall Detector Add-on
 

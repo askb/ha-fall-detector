@@ -26,6 +26,8 @@ go2rtc:
       - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@192.168.1.138:554/cam/realmonitor?channel=6&subtype=0
     front_camera_sub:
       - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@192.168.1.138:554/cam/realmonitor?channel=6&subtype=1
+    eufy_indoor:
+      - rtsp://{FRIGATE_EUFY_RTSP_USER}:{FRIGATE_EUFY_RTSP_PASS}@192.168.1.196:554/live0
 
 cameras:
   front_camera:
@@ -76,7 +78,39 @@ cameras:
           - dog
         inertia: 3
 
+  # --- Eufy Indoor 2K Pan & Tilt (T8410) - Living Room ---
+  eufy_indoor:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/eufy_indoor
+          roles:
+            - detect
+            - record
+    snapshots:
+      enabled: true
+      timestamp: false
+      bounding_box: true
+      crop: false
+      quality: 90
+    detect:
+      enabled: true
+      width: 704
+      height: 480
+      fps: 5
+    objects:
+      track:
+        - person
+      filters:
+        person:
+          min_area: 5000
+          threshold: 0.7
+    record:
+      enabled: true
+      retain:
+        days: 1
+
 detect:
   enabled: true
 
-version: 0.15-0
+version: 0.15-1

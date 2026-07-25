@@ -6,17 +6,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-import sys
-
-if sys.version_info >= (3, 11):
-    from enum import StrEnum
-else:
-    from enum import Enum
-
-    class StrEnum(str, Enum):
-        """Backport of StrEnum for Python < 3.11."""
-
-        pass
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -137,6 +127,7 @@ class HealthResponse(BaseModel):
     uptime_seconds: float = 0.0
     cameras_monitored: int = 0
     cameras_online: int = 0
+    pose_ready: bool = False
 
 
 class AlertAction(StrEnum):

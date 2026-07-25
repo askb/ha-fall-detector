@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
-from datetime import datetime
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 import aiomqtt
 
@@ -22,7 +23,6 @@ class FrigateEventData:
         self.raw = raw
         self.event_type: str = raw.get("type", "")  # "new", "update", "end"
         after = raw.get("after", {})
-        before = raw.get("before", {})
         self.event_id: str = after.get("id", "")
         self.camera: str = after.get("camera", "")
         self.label: str = after.get("label", "")
@@ -93,10 +93,8 @@ class FrigateMqttListener:
         self._running = False
         if self._task:
             self._task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-            except asyncio.CancelledError:
-                pass
         logger.info("mqtt_listener_stopped")
 
     async def _listen_loop(self) -> None:

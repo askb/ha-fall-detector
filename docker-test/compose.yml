@@ -35,7 +35,7 @@ services:
       - "8555:8555/tcp" # WebRTC (go2rtc)
       - "8555:8555/udp"
     volumes:
-      - ./frigate/config.yml:/config/config.yml:ro
+      - ./frigate/config.yml:/config/config.yml
       - frigate-media:/media/frigate
       - /dev/dri:/dev/dri  # AMD VAAPI for video decode
     devices:
@@ -43,6 +43,8 @@ services:
     shm_size: "512mb"
     environment:
       - FRIGATE_RTSP_PASSWORD=${CAMERA_PASSWORD:-changeme}
+      - FRIGATE_EUFY_RTSP_USER=${EUFY_RTSP_USER:-changeme}
+      - FRIGATE_EUFY_RTSP_PASS=${EUFY_RTSP_PASS:-changeme}
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:5000/api/version"]
       interval: 15s

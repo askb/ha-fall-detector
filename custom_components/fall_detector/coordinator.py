@@ -93,13 +93,9 @@ class FallDetectorCoordinator(DataUpdateCoordinator[FallDetectorData]):
             status = await self.api.async_get_status()
             return FallDetectorData(status)
         except FallDetectorConnectionError as err:
-            raise UpdateFailed(
-                f"Cannot connect to Fall Detector add-on: {err}"
-            ) from err
+            raise UpdateFailed(f"Cannot connect to Fall Detector add-on: {err}") from err
         except FallDetectorApiError as err:
-            raise UpdateFailed(
-                f"Error fetching Fall Detector data: {err}"
-            ) from err
+            raise UpdateFailed(f"Error fetching Fall Detector data: {err}") from err
 
     async def async_shutdown(self) -> None:
         """Clean up on shutdown."""

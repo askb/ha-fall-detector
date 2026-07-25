@@ -66,9 +66,7 @@ def _camera_device_info(camera_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-class FallDetectorResetAllButton(
-    CoordinatorEntity[FallDetectorCoordinator], ButtonEntity
-):
+class FallDetectorResetAllButton(CoordinatorEntity[FallDetectorCoordinator], ButtonEntity):
     """Button to reset all camera states and clear active alerts."""
 
     _attr_has_entity_name = True
@@ -94,17 +92,13 @@ class FallDetectorResetAllButton(
 # ---------------------------------------------------------------------------
 
 
-class CameraTestFallAlertButton(
-    CoordinatorEntity[FallDetectorCoordinator], ButtonEntity
-):
+class CameraTestFallAlertButton(CoordinatorEntity[FallDetectorCoordinator], ButtonEntity):
     """Button to trigger a test fall alert on a specific camera."""
 
     _attr_has_entity_name = True
     _attr_icon = "mdi:alert-circle-check-outline"
 
-    def __init__(
-        self, coordinator: FallDetectorCoordinator, camera_name: str
-    ) -> None:
+    def __init__(self, coordinator: FallDetectorCoordinator, camera_name: str) -> None:
         """Initialize the button."""
         super().__init__(coordinator)
         self._camera_name = camera_name

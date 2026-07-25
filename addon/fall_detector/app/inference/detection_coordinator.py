@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections import deque
 from datetime import datetime, timedelta
 
@@ -58,6 +59,11 @@ class DetectionCoordinator:
             self._camera_states[cam] = CameraState(camera_name=cam)
 
     @property
+    def pose_ready(self) -> bool:
+        """Whether the pose model is loaded and ready for inference."""
+        return self._pose_estimator.is_ready()
+
+    @property
     def camera_states(self) -> dict[str, CameraState]:
         return self._camera_states
 
@@ -103,10 +109,8 @@ class DetectionCoordinator:
         self._running = False
         for name, task in self._tasks.items():
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
             logger.info("camera_monitoring_stopped", camera=name)
         self._tasks.clear()
 
@@ -136,6 +140,17 @@ class DetectionCoordinator:
                 # Run pose estimation
                 pose = await self._pose_estimator.estimate_pose(frame)
 
+                # No person detected — skip scoring
+                if pose is None:
+                    # Reset fall candidate if no person visible
+                    if state.fall_candidate_start is not None:
+                        state.consecutive_fall_frames = 0
+                        state.fall_candidate_start = None
+                    await asyncio.sleep(interval)
+                    continue
+
+                state.last_person_detected = timestamp
+
                 # Score frame
                 result = self._scorer.score_frame(
                     camera_name=camera_name,
@@ -149,9 +164,8 @@ class DetectionCoordinator:
                     await self._handle_confirmed_fall(camera_name, state, result, timestamp)
 
                 # Check for recovery on active alerts
-                elif state.active_alert and pose is not None:
-                    if self._scorer.check_recovery(camera_name, pose):
-                        await self._handle_recovery(camera_name, state)
+                elif state.active_alert and pose is not None and self._scorer.check_recovery(camera_name, pose):
+                    await self._handle_recovery(camera_name, state)
 
                 # Emit event for any significant stage
                 if result.stage not in (DetectionStage.REJECTED, DetectionStage.PERSON_DETECTED):

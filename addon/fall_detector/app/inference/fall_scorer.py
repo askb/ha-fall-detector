@@ -4,12 +4,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from app.models import (
     CameraState,
     DetectionStage,
-    FallDetectionEvent,
     MotionSummary,
     PoseSummary,
     ReasonCode,
@@ -22,6 +21,7 @@ logger = get_logger(__name__)
 @dataclass
 class ScoringConfig:
     """Configuration for fall scoring thresholds."""
+
     confidence_threshold: float = 0.7
     fall_confirmation_seconds: int = 5
     recovery_window_seconds: int = 30
@@ -41,6 +41,7 @@ class ScoringConfig:
 @dataclass
 class ScoreResult:
     """Result of scoring a single frame."""
+
     stage: DetectionStage
     confidence: float
     reason_codes: list[ReasonCode] = field(default_factory=list)
@@ -104,10 +105,9 @@ class FallScorer:
                 confidence += 0.15  # Partial lean
 
         # Check aspect ratio
-        if pose.body_aspect_ratio is not None:
-            if pose.body_aspect_ratio < self._config.prone_aspect_max:
-                confidence += 0.25
-                reason_codes.append(ReasonCode.ASPECT_RATIO_CHANGE)
+        if pose.body_aspect_ratio is not None and pose.body_aspect_ratio < self._config.prone_aspect_max:
+            confidence += 0.25
+            reason_codes.append(ReasonCode.ASPECT_RATIO_CHANGE)
 
         # Check rapid descent
         if motion.is_rapid_descent:
@@ -197,9 +197,7 @@ class FallScorer:
             return False
         if pose.torso_angle is not None and pose.torso_angle > self._config.upright_angle_min:
             return True
-        if pose.body_aspect_ratio is not None and pose.body_aspect_ratio > self._config.standing_aspect_min:
-            return True
-        return False
+        return bool(pose.body_aspect_ratio is not None and pose.body_aspect_ratio > self._config.standing_aspect_min)
 
     def _analyze_motion(self, camera_name: str) -> MotionSummary:
         """Analyze motion from pose history."""

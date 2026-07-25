@@ -33,6 +33,17 @@ COPY requirements.txt /app/requirements.txt
 RUN pip3 install --no-cache-dir --break-system-packages --prefer-binary \
     -r /app/requirements.txt
 
+# Pre-bake pose models so the add-on works without first-boot internet
+# (tfhub.dev is dead). Pinned to an immutable commit + verified checksums.
+ARG MOVENET_REPO=https://github.com/yuanoook/tf-movenet-files-hub/raw/32fa5c49223b8ff4279a46b3e6ff211f2ca9f31e
+RUN mkdir -p /app/models \
+    && curl -sfL -o /app/models/movenet_lightning.tflite \
+        "${MOVENET_REPO}/singlepose-lightning-tflite-int8.tflite" \
+    && curl -sfL -o /app/models/movenet_thunder.tflite \
+        "${MOVENET_REPO}/singlepose-thunder-tflite-int8.tflite" \
+    && echo "cd7cc22fa946e5d146a7b98d496853e1923e22828d3972d579973f27f91bb105  /app/models/movenet_lightning.tflite" | sha256sum -c - \
+    && echo "b72fed22707cd6fb94b5a248b9bddb9c062b9f445471b4fa263407cf6d222011  /app/models/movenet_thunder.tflite" | sha256sum -c -
+
 # Copy application code
 COPY app/ /app/app/
 

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
-"""Fall Detector – FastAPI application entry-point.
+"""Fall Detector - FastAPI application entry-point.
 
 Wires together configuration, logging, MQTT/Frigate clients, the detection
 coordinator, and exposes the REST API consumed by the ingress panel and
@@ -9,12 +9,10 @@ Home Assistant automations.
 
 from __future__ import annotations
 
-import asyncio
 import time
-from collections import deque
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
-from typing import AsyncIterator
+from datetime import datetime
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Response
@@ -86,11 +84,7 @@ class AppState:
 
     @property
     def active_alerts(self) -> int:
-        return sum(
-            1
-            for cam in self.cameras.values()
-            if cam.active_alert and not cam.alert_acknowledged
-        )
+        return sum(1 for cam in self.cameras.values() if cam.active_alert and not cam.alert_acknowledged)
 
     @property
     def last_event(self) -> FallDetectionEvent | None:
@@ -118,10 +112,23 @@ class AppState:
 
     async def start(self) -> None:
         """Create components, wire callbacks, and start the detection pipeline."""
-        # Frame source
-        self.frame_source = FrigateFrameSource(
-            frigate_url=self.settings.frigate_url,
-        )
+        # Frame source — selected by camera_source config
+        if self.settings.camera_source == "home_assistant":
+            from app.inference.frame_source import HomeAssistantFrameSource
+
+            self.frame_source = HomeAssistantFrameSource(ha_url=self.settings.ha_url)
+        elif self.settings.camera_source == "rtsp":
+            from app.inference.frame_source import RtspFrameSource
+
+            streams = self.settings.rtsp_stream_map()
+            # RTSP mode: monitor the configured streams if no explicit list
+            if not self.settings.monitored_cameras:
+                self.settings.monitored_cameras = list(streams.keys())
+            self.frame_source = RtspFrameSource(streams=streams)
+        else:
+            self.frame_source = FrigateFrameSource(
+                frigate_url=self.settings.frigate_url,
+            )
 
         # Pose estimator — select backend based on config
         if self.settings.pose_backend.startswith("yolo_pose"):
@@ -236,7 +243,7 @@ def get_state() -> AppState:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage startup and shutdown of background services."""
-    global _app_state  # noqa: PLW0603
+    global _app_state
 
     settings = Settings.from_addon_options()
     setup_logging(settings.log_level)
@@ -260,7 +267,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Fall Detector API",
     description="AI-powered elderly fall detection for Home Assistant",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -272,14 +279,17 @@ app = FastAPI(
 async def health(state: AppState = Depends(get_state)) -> HealthResponse:
     """Lightweight health check consumed by the HA watchdog."""
     return HealthResponse(
-        status="ok",
+        status="ok" if _pose_ready(state) else "degraded",
         version=state.settings.version,
         uptime_seconds=round(state.uptime, 1),
         cameras_monitored=len(state.cameras),
-        cameras_online=sum(
-            1 for c in state.cameras.values() if c.monitoring_active
-        ),
+        cameras_online=sum(1 for c in state.cameras.values() if c.monitoring_active),
+        pose_ready=_pose_ready(state),
     )
+
+
+def _pose_ready(state: AppState) -> bool:
+    return bool(state.coordinator and state.coordinator.pose_ready)
 
 
 @app.get("/status", response_model=SystemStatus, tags=["status"])
@@ -446,7 +456,6 @@ async def camera_snapshot_debug(
             detail="Debug frame retention is disabled in configuration",
         )
 
-    import os
     from pathlib import Path
 
     debug_dir = Path(state.settings.fall_detector_data_path) / "debug_frames"

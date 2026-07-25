@@ -1,11 +1,7 @@
 """Tests for the Fall Detector config flow."""
 # SPDX-License-Identifier: Apache-2.0
 
-from unittest.mock import AsyncMock, patch
-
-import pytest
-
-from custom_components.fall_detector.const import CONF_ADDON_URL, DOMAIN
+from custom_components.fall_detector.const import CONF_ADDON_URL
 
 
 async def test_config_flow_user_step_success():

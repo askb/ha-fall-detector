@@ -39,12 +39,20 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
-          python-version: "3.12"
+          # 3.11: matches the add-on container; tflite-runtime has no 3.12 wheels
+          python-version: "3.11"
       - name: Install dependencies
         run: |
           pip install -r addon/fall_detector/requirements.txt
           pip install -r addon/fall_detector/requirements-test.txt
+      - name: Download pose model for e2e test
+        run: |
+          mkdir -p /tmp/fd_models
+          curl -sfL -o /tmp/fd_models/movenet_lightning.tflite \
+            "https://github.com/yuanoook/tf-movenet-files-hub/raw/32fa5c49223b8ff4279a46b3e6ff211f2ca9f31e/singlepose-lightning-tflite-int8.tflite"
       - name: Run add-on tests
+        env:
+          FD_MODEL_DIR: /tmp/fd_models
         run: pytest addon/fall_detector/tests/ -v --tb=short
 
   test-integration:

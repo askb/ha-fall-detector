@@ -67,9 +67,7 @@ def _camera_device_info(camera_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-class FallDetectorNotificationsMutedSwitch(
-    CoordinatorEntity[FallDetectorCoordinator], SwitchEntity
-):
+class FallDetectorNotificationsMutedSwitch(CoordinatorEntity[FallDetectorCoordinator], SwitchEntity):
     """Switch to mute / unmute all fall-detector notifications."""
 
     _attr_has_entity_name = True
@@ -106,18 +104,14 @@ class FallDetectorNotificationsMutedSwitch(
 # ---------------------------------------------------------------------------
 
 
-class CameraFallAlertsEnabledSwitch(
-    CoordinatorEntity[FallDetectorCoordinator], SwitchEntity
-):
+class CameraFallAlertsEnabledSwitch(CoordinatorEntity[FallDetectorCoordinator], SwitchEntity):
     """Switch to enable / disable fall alerts for a specific camera."""
 
     _attr_has_entity_name = True
     _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_icon = "mdi:bell-ring-outline"
 
-    def __init__(
-        self, coordinator: FallDetectorCoordinator, camera_name: str
-    ) -> None:
+    def __init__(self, coordinator: FallDetectorCoordinator, camera_name: str) -> None:
         """Initialize the switch."""
         super().__init__(coordinator)
         self._camera_name = camera_name
@@ -134,14 +128,10 @@ class CameraFallAlertsEnabledSwitch(
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable fall alerts for the camera."""
-        await self.coordinator.api.async_set_camera_alerts(
-            self._camera_name, enabled=True
-        )
+        await self.coordinator.api.async_set_camera_alerts(self._camera_name, enabled=True)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable fall alerts for the camera."""
-        await self.coordinator.api.async_set_camera_alerts(
-            self._camera_name, enabled=False
-        )
+        await self.coordinator.api.async_set_camera_alerts(self._camera_name, enabled=False)
         await self.coordinator.async_request_refresh()

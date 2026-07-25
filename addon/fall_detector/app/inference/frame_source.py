@@ -157,8 +157,14 @@ class RtspFrameSource(FrameSource):
     """
 
     def __init__(self, streams: dict[str, str]):
+        from concurrent.futures import ThreadPoolExecutor
+
         self._streams = streams
         self._captures: dict = {}
+        # ponytail: one shared reader thread serialises all capture ops
+        # (VideoCapture is not thread-safe); per-camera threads if
+        # multi-camera rtsp throughput ever matters
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="rtsp-reader")
 
     def _read_frame(self, camera_name: str) -> np.ndarray | None:
         """Blocking read; runs in a thread executor."""
@@ -189,7 +195,7 @@ class RtspFrameSource(FrameSource):
         import asyncio
 
         try:
-            frame = await asyncio.get_running_loop().run_in_executor(None, self._read_frame, camera_name)
+            frame = await asyncio.get_running_loop().run_in_executor(self._executor, self._read_frame, camera_name)
             if frame is None:
                 logger.warning("frame_fetch_failed", camera=camera_name)
             return frame, datetime.utcnow()
@@ -200,8 +206,16 @@ class RtspFrameSource(FrameSource):
     async def is_available(self, camera_name: str) -> bool:
         return camera_name in self._streams
 
-    async def close(self) -> None:
+    def _release_all(self) -> None:
+        """Release captures on the reader thread (never races a read)."""
         for cap in self._captures.values():
             with contextlib.suppress(Exception):
                 cap.release()
         self._captures.clear()
+
+    async def close(self) -> None:
+        import asyncio
+
+        with contextlib.suppress(Exception):
+            await asyncio.get_running_loop().run_in_executor(self._executor, self._release_all)
+        self._executor.shutdown(wait=False)

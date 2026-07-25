@@ -59,6 +59,11 @@ class DetectionCoordinator:
             self._camera_states[cam] = CameraState(camera_name=cam)
 
     @property
+    def pose_ready(self) -> bool:
+        """Whether the pose model is loaded and ready for inference."""
+        return self._pose_estimator.is_ready()
+
+    @property
     def camera_states(self) -> dict[str, CameraState]:
         return self._camera_states
 

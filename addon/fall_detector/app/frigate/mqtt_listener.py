@@ -23,7 +23,6 @@ class FrigateEventData:
         self.raw = raw
         self.event_type: str = raw.get("type", "")  # "new", "update", "end"
         after = raw.get("after", {})
-        raw.get("before", {})
         self.event_id: str = after.get("id", "")
         self.camera: str = after.get("camera", "")
         self.label: str = after.get("label", "")

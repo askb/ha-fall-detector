@@ -289,8 +289,7 @@ async def health(state: AppState = Depends(get_state)) -> HealthResponse:
 
 
 def _pose_ready(state: AppState) -> bool:
-    coord = state.coordinator
-    return bool(coord and coord._pose_estimator.is_ready())
+    return bool(state.coordinator and state.coordinator.pose_ready)
 
 
 @app.get("/status", response_model=SystemStatus, tags=["status"])

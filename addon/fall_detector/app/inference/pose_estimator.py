@@ -58,8 +58,8 @@ class MoveNetEstimator(PoseEstimator):
 
     # tfhub.dev is dead (404 since 2024); use the community GitHub mirror.
     MODEL_URLS: ClassVar[dict[str, str]] = {
-        "movenet_lightning": "https://github.com/yuanoook/tf-movenet-files-hub/raw/main/singlepose-lightning-tflite-int8.tflite",
-        "movenet_thunder": "https://github.com/yuanoook/tf-movenet-files-hub/raw/main/singlepose-thunder-tflite-int8.tflite",
+        "movenet_lightning": "https://github.com/yuanoook/tf-movenet-files-hub/raw/32fa5c49223b8ff4279a46b3e6ff211f2ca9f31e/singlepose-lightning-tflite-int8.tflite",
+        "movenet_thunder": "https://github.com/yuanoook/tf-movenet-files-hub/raw/32fa5c49223b8ff4279a46b3e6ff211f2ca9f31e/singlepose-thunder-tflite-int8.tflite",
     }
 
     # Models pre-baked into the Docker image at build time (no network needed)

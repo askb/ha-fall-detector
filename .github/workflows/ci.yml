@@ -49,7 +49,7 @@ jobs:
         run: |
           mkdir -p /tmp/fd_models
           curl -sfL -o /tmp/fd_models/movenet_lightning.tflite \
-            "https://github.com/yuanoook/tf-movenet-files-hub/raw/main/singlepose-lightning-tflite-int8.tflite"
+            "https://github.com/yuanoook/tf-movenet-files-hub/raw/32fa5c49223b8ff4279a46b3e6ff211f2ca9f31e/singlepose-lightning-tflite-int8.tflite"
       - name: Run add-on tests
         env:
           FD_MODEL_DIR: /tmp/fd_models

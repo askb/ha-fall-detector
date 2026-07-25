@@ -43,4 +43,5 @@ known-first-party = ["app", "fall_detector"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "addon/fall_detector/tests"]
+pythonpath = ["."]
 asyncio_mode = "auto"

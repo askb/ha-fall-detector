@@ -56,7 +56,9 @@ class FallDetectorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             api = FallDetectorApi(base_url=self._addon_url)
             try:
                 health = await api.async_get_health()
-                if health.get("status") == "ok":
+                # "ok" or "degraded" both mean the add-on is reachable;
+                # degraded only signals the pose model isn't loaded yet
+                if health.get("status") in ("ok", "degraded"):
                     self._data[CONF_ADDON_URL] = self._addon_url
                     await api.async_close()
                     return await self.async_step_frigate()

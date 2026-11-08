@@ -174,11 +174,14 @@ class DetectionCoordinator:
 
                 alert_event: FallDetectionEvent | None = None
                 suppressed = False
+                generation = self._generation.get(camera_name, 0)
 
                 # Handle confirmed fall
                 if result.should_alert and result.stage == DetectionStage.CONFIRMED_FALL:
                     alert_event = await self._handle_confirmed_fall(camera_name, state, result, timestamp)
-                    if alert_event is None:
+                    if self._generation.get(camera_name, 0) != generation:
+                        pass  # reset during the sensor query; handled below
+                    elif alert_event is None:
                         suppressed = True
                         self._pending_fusion.setdefault(camera_name, (result, timestamp))
                     else:
@@ -192,6 +195,11 @@ class DetectionCoordinator:
                 # Check for recovery on active alerts
                 elif state.active_alert and pose is not None and self._scorer.check_recovery(camera_name, pose):
                     await self._handle_recovery(camera_name, state)
+
+                # A reset during an awaited sensor query invalidates this frame
+                if self._generation.get(camera_name, 0) != generation:
+                    await asyncio.sleep(interval)
+                    continue
 
                 # Emit event for any significant stage
                 event: FallDetectionEvent | None = alert_event
@@ -256,8 +264,8 @@ class DetectionCoordinator:
             return None, False
         event = await self._handle_confirmed_fall(camera_name, state, result, timestamp)
         if event is None:
-            return None, True
-        self._pending_fusion.pop(camera_name)
+            return None, camera_name in self._pending_fusion  # False if a reset cleared it
+        self._pending_fusion.pop(camera_name, None)
         return event, False
 
     async def _handle_confirmed_fall(

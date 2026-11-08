@@ -135,10 +135,12 @@ def _score(stage: DetectionStage, should_alert: bool = False) -> ScoreResult:
     )
 
 
-async def _run_loop(settings, scores, sensor, recovery=None, step_seconds=0.0):
+async def _run_loop(settings, scores, sensor, recovery=None, step_seconds=0.0, mode="require", holder=None):
     """Drive _monitor_camera for len(scores) frames; return (alerts, events, coordinator)."""
     settings.frame_sample_rate = 30.0
-    coord, alerts = _coordinator(settings, "require", None)
+    coord, alerts = _coordinator(settings, mode, None)
+    if holder is not None:
+        holder["coord"] = coord
     coord._fusion.corroborate = AsyncMock(side_effect=sensor)
     coord._pose_estimator.estimate_pose = AsyncMock(return_value=PoseSummary())
     coord._scorer = MagicMock()
@@ -270,3 +272,28 @@ async def test_recovery_clears_candidate_state(settings):
     state = coord.camera_states["living_room"]
     assert state.fall_candidate_start is None
     assert state.consecutive_fall_frames == 0
+
+
+@pytest.mark.parametrize("mode", ["boost", "require"])
+async def test_reset_during_query_in_loop_leaves_no_pending(settings, mode):
+    """A discarded (reset) result must not be treated as a sensor rejection."""
+    holder: dict = {}
+    calls: list = []
+
+    async def corroborate(camera):
+        calls.append(camera)
+        if len(calls) == 1:
+            holder["coord"].reset_camera_state(camera)  # reset while query is in flight
+            return False
+        return True
+
+    alerts, _, coord = await _run_loop(
+        settings,
+        scores=[_score(DetectionStage.CONFIRMED_FALL, True), _score(DetectionStage.POSE_ESTIMATED)],
+        sensor=corroborate,
+        mode=mode,
+        holder=holder,
+    )
+    assert alerts == []
+    assert "living_room" not in coord._pending_fusion
+    assert len(calls) == 1  # no stale retry on the next frame

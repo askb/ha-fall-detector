@@ -176,15 +176,18 @@ class DetectionCoordinator:
                 suppressed = False
                 generation = self._generation.get(camera_name, 0)
 
-                # Recovery cancels a pending fall before any re-confirmation
+                # Recovery cancels a pending fall before any re-confirmation;
+                # this frame must not be published as a confirmed fall
                 if camera_name in self._pending_fusion and self._scorer.check_recovery(camera_name, pose):
                     self._pending_fusion.pop(camera_name)
                     state.consecutive_fall_frames = 0
                     state.fall_candidate_start = None
                     logger.info("pending_fusion_cleared_recovery", camera=camera_name)
+                    await asyncio.sleep(interval)
+                    continue
 
                 # Handle confirmed fall
-                elif result.should_alert and result.stage == DetectionStage.CONFIRMED_FALL:
+                if result.should_alert and result.stage == DetectionStage.CONFIRMED_FALL:
                     alert_event = await self._handle_confirmed_fall(camera_name, state, result, timestamp)
                     if self._generation.get(camera_name, 0) != generation:
                         pass  # reset during the sensor query; handled below

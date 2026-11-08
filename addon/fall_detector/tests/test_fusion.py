@@ -235,7 +235,7 @@ async def test_alert_on_confirmed_frame_clears_pending(settings):
 async def test_expiry_checked_on_confirmed_frames(settings):
     """A still-confirmed fall past the window must not alert on a late sensor."""
     settings.fusion_window_seconds = 5
-    alerts, _, coord = await _run_loop(
+    alerts, events, coord = await _run_loop(
         settings,
         scores=[_score(DetectionStage.CONFIRMED_FALL, True), _score(DetectionStage.CONFIRMED_FALL, True)],
         sensor=[False, True],
@@ -307,12 +307,13 @@ async def test_recovery_beats_reconfirmed_score_while_pending(settings):
         calls.append(camera)
         return len(calls) > 1  # would agree on a second query
 
-    alerts, _, coord = await _run_loop(
+    alerts, events, coord = await _run_loop(
         settings,
         scores=[_score(DetectionStage.CONFIRMED_FALL, True), _score(DetectionStage.CONFIRMED_FALL, True)],
         sensor=corroborate,
         recovery=[True, True],
     )
     assert alerts == []
+    assert all(e.stage != DetectionStage.CONFIRMED_FALL for e in events)
     assert "living_room" not in coord._pending_fusion
     assert len(calls) == 1

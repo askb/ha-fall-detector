@@ -28,7 +28,6 @@ action:
         {{ trigger.to_state.name }} reported a fall
         at {{ now().strftime('%H:%M:%S') }}.
       data:
-        # Same tag per sensor: repeat pulses update one notification
         tag: "fall-alert-{{ trigger.entity_id }}"
         importance: high
         channel: fall_alerts
@@ -43,4 +42,10 @@ action:
           - action: "URI"
             title: "📞 Call them"
             uri: "tel:+10000000000"  # replace with the monitored person's number
-mode: parallel
+  # Cooldown: repeat pulses during this delay are dropped (iOS cannot
+  # replace critical notifications, so the tag alone does not dedupe).
+  # ponytail: one cooldown for all rooms, fine for one monitored person;
+  # split per room (one automation each) if several people live there.
+  - delay: "00:01:00"
+mode: single
+max_exceeded: silent

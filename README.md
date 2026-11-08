@@ -354,9 +354,10 @@ fusion_sensors:
 ```
 
 The sensor agrees when its state is `on`/`detected`/`fall`, or when it
-changed within the window. In `require` mode an unconfirmed fall is re-checked
-on every frame while the person stays down, so a lagging sensor can still
-confirm it. If the sensor is unreachable or `unavailable`, the alert is
+changed within the window. In `require` mode an unconfirmed fall is published
+as `fall_confirming` and re-checked on every frame until the sensor agrees, the
+person recovers or leaves view, or `fusion_window_seconds` passes, so a lagging
+sensor can still confirm it. If the sensor is unreachable or `unavailable`, the alert is
 **sent anyway** with `SENSOR_UNAVAILABLE`, because missing a real fall is worse
 than a false alarm.
 

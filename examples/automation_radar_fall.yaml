@@ -18,9 +18,8 @@ trigger:
       - binary_sensor.toilet_fall_detected
       - binary_sensor.hallway_fall_detected
       - binary_sensor.bedroom_fp2_fall
+    # Rising edge only: radar fall states can pulse briefly, so no dwell filter
     to: "on"
-    # Ignore sub-second radar blips
-    for: "00:00:03"
 action:
   - service: notify.mobile_app_caregivers_phone
     data:
@@ -29,6 +28,7 @@ action:
         {{ trigger.to_state.name }} reported a fall
         at {{ now().strftime('%H:%M:%S') }}.
       data:
+        # Same tag per sensor: repeat pulses update one notification
         tag: "fall-alert-{{ trigger.entity_id }}"
         importance: high
         channel: fall_alerts

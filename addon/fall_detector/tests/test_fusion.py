@@ -297,3 +297,22 @@ async def test_reset_during_query_in_loop_leaves_no_pending(settings, mode):
     assert alerts == []
     assert "living_room" not in coord._pending_fusion
     assert len(calls) == 1  # no stale retry on the next frame
+
+
+async def test_recovery_beats_reconfirmed_score_while_pending(settings):
+    """A re-emitted confirmed score must not alert once the person has recovered."""
+    calls: list = []
+
+    async def corroborate(camera):
+        calls.append(camera)
+        return len(calls) > 1  # would agree on a second query
+
+    alerts, _, coord = await _run_loop(
+        settings,
+        scores=[_score(DetectionStage.CONFIRMED_FALL, True), _score(DetectionStage.CONFIRMED_FALL, True)],
+        sensor=corroborate,
+        recovery=[True, True],
+    )
+    assert alerts == []
+    assert "living_room" not in coord._pending_fusion
+    assert len(calls) == 1

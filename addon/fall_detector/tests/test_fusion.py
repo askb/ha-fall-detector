@@ -142,7 +142,16 @@ async def _run_loop(settings, scores, sensor, recovery=None, step_seconds=0.0):
     coord._fusion.corroborate = AsyncMock(side_effect=sensor)
     coord._pose_estimator.estimate_pose = AsyncMock(return_value=PoseSummary())
     coord._scorer = MagicMock()
-    coord._scorer.score_frame.side_effect = scores
+    queued = iter(scores)
+
+    def score_frame(camera_name, pose, camera_state, person_detected):
+        nxt = next(queued)
+        # Mirror the real scorer: cooldown rejects the frame
+        if camera_state.cooldown_until and datetime.utcnow() < camera_state.cooldown_until:
+            return _score(DetectionStage.REJECTED)
+        return nxt
+
+    coord._scorer.score_frame.side_effect = score_frame
     coord._scorer.check_recovery.side_effect = recovery or [False] * len(scores)
 
     start = datetime.utcnow()
@@ -201,3 +210,34 @@ async def test_pending_fusion_expires(settings):
     )
     assert alerts == []
     assert "living_room" not in coord._pending_fusion
+
+
+async def test_alert_on_confirmed_frame_clears_pending(settings):
+    """Sensor agrees on a later confirmed frame: one alert, no stale retry."""
+    alerts, _, coord = await _run_loop(
+        settings,
+        scores=[
+            _score(DetectionStage.CONFIRMED_FALL, True),
+            _score(DetectionStage.CONFIRMED_FALL, True),
+            _score(DetectionStage.REJECTED),  # scorer cooldown
+        ],
+        sensor=[False, True, True],
+    )
+    assert len(alerts) == 1
+    assert "living_room" not in coord._pending_fusion
+
+
+async def test_expiry_checked_on_confirmed_frames(settings):
+    """A still-confirmed fall past the window must not alert on a late sensor."""
+    settings.fusion_window_seconds = 5
+    alerts, _, coord = await _run_loop(
+        settings,
+        scores=[_score(DetectionStage.CONFIRMED_FALL, True), _score(DetectionStage.CONFIRMED_FALL, True)],
+        sensor=[False, True],
+        step_seconds=10,
+    )
+    assert alerts == []
+    assert "living_room" not in coord._pending_fusion
+    state = coord.camera_states["living_room"]
+    assert state.cooldown_until is not None
+    assert state.fall_candidate_start is None

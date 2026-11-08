@@ -159,6 +159,9 @@ class DetectionCoordinator:
 
                 state.last_person_detected = timestamp
 
+                # Expire before scoring so the cooldown also rejects this frame
+                self._expire_pending_fusion(camera_name, state, timestamp)
+
                 # Score frame
                 result = self._scorer.score_frame(
                     camera_name=camera_name,
@@ -176,6 +179,8 @@ class DetectionCoordinator:
                     if alert_event is None:
                         suppressed = True
                         self._pending_fusion.setdefault(camera_name, (result, timestamp))
+                    else:
+                        self._pending_fusion.pop(camera_name, None)
 
                 # Retry a suppressed fall until the sensor agrees, the person
                 # recovers, or the fusion window expires
@@ -217,6 +222,21 @@ class DetectionCoordinator:
                 logger.exception("monitoring_loop_error", camera=camera_name)
                 await asyncio.sleep(interval * 2)  # Back off on error
 
+    def _expire_pending_fusion(self, camera_name: str, state: CameraState, timestamp: datetime) -> None:
+        """Drop a pending fall the sensor never confirmed within the window.
+
+        The camera then cools down and the candidate is re-armed, so the same
+        unchanged fall is not immediately queued again.
+        """
+        pending = self._pending_fusion.get(camera_name)
+        if not pending or (timestamp - pending[1]).total_seconds() <= self._settings.fusion_window_seconds:
+            return
+        self._pending_fusion.pop(camera_name)
+        state.consecutive_fall_frames = 0
+        state.fall_candidate_start = None
+        state.cooldown_until = datetime.utcnow() + timedelta(seconds=self._settings.alert_cooldown_seconds)
+        logger.info("pending_fusion_expired", camera=camera_name)
+
     async def _retry_pending_fusion(
         self,
         camera_name: str,
@@ -225,14 +245,10 @@ class DetectionCoordinator:
         timestamp: datetime,
     ) -> tuple[FallDetectionEvent | None, bool]:
         """Re-check a suppressed fall. Returns (alert_event, still_suppressed)."""
-        result, started = self._pending_fusion[camera_name]
+        result, _ = self._pending_fusion[camera_name]
         if self._scorer.check_recovery(camera_name, pose):
             self._pending_fusion.pop(camera_name)
             logger.info("pending_fusion_cleared_recovery", camera=camera_name)
-            return None, False
-        if (timestamp - started).total_seconds() > self._settings.fusion_window_seconds:
-            self._pending_fusion.pop(camera_name)
-            logger.info("pending_fusion_expired", camera=camera_name)
             return None, False
         event = await self._handle_confirmed_fall(camera_name, state, result, timestamp)
         if event is None:

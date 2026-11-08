@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 from app.config.settings import Settings
 from app.fusion import SensorFusion
-from app.inference.fall_scorer import FallScorer, ScoringConfig
+from app.inference.fall_scorer import FallScorer, ScoreResult, ScoringConfig
 from app.inference.frame_source import FrameSource
 from app.inference.pose_estimator import PoseEstimator
 from app.models import (
@@ -51,6 +51,8 @@ class DetectionCoordinator:
         self._recent_events: deque[FallDetectionEvent] = deque(maxlen=100)
         self._running = False
         self._tasks: dict[str, asyncio.Task] = {}
+        # Camera-confirmed falls awaiting sensor corroboration (require mode)
+        self._pending_fusion: dict[str, tuple[ScoreResult, datetime]] = {}
         self._start_time = datetime.utcnow()
         self._total_events = 0
         self._notifications_muted = False
@@ -151,6 +153,7 @@ class DetectionCoordinator:
                     if state.fall_candidate_start is not None:
                         state.consecutive_fall_frames = 0
                         state.fall_candidate_start = None
+                    self._pending_fusion.pop(camera_name, None)
                     await asyncio.sleep(interval)
                     continue
 
@@ -164,25 +167,42 @@ class DetectionCoordinator:
                     person_detected=True,
                 )
 
+                alert_event: FallDetectionEvent | None = None
+                suppressed = False
+
                 # Handle confirmed fall
                 if result.should_alert and result.stage == DetectionStage.CONFIRMED_FALL:
-                    await self._handle_confirmed_fall(camera_name, state, result, timestamp)
+                    alert_event = await self._handle_confirmed_fall(camera_name, state, result, timestamp)
+                    if alert_event is None:
+                        suppressed = True
+                        self._pending_fusion.setdefault(camera_name, (result, timestamp))
+
+                # Retry a suppressed fall until the sensor agrees, the person
+                # recovers, or the fusion window expires
+                elif camera_name in self._pending_fusion:
+                    alert_event, suppressed = await self._retry_pending_fusion(camera_name, state, pose, timestamp)
 
                 # Check for recovery on active alerts
                 elif state.active_alert and pose is not None and self._scorer.check_recovery(camera_name, pose):
                     await self._handle_recovery(camera_name, state)
 
                 # Emit event for any significant stage
-                if result.stage not in (DetectionStage.REJECTED, DetectionStage.PERSON_DETECTED):
+                event: FallDetectionEvent | None = alert_event
+                if event is None and result.stage not in (DetectionStage.REJECTED, DetectionStage.PERSON_DETECTED):
+                    stage = result.stage
+                    if suppressed and stage == DetectionStage.CONFIRMED_FALL:
+                        # Not confirmed until the sensor agrees
+                        stage = DetectionStage.FALL_CONFIRMING
                     event = FallDetectionEvent(
                         camera=camera_name,
                         timestamp=timestamp,
                         confidence=result.confidence,
-                        stage=result.stage,
+                        stage=stage,
                         pose_summary=result.pose_summary or pose,
                         motion_summary=result.motion_summary,
                         reason_codes=result.reason_codes,
                     )
+                if event is not None:
                     for cb in self._event_callbacks:
                         try:
                             await cb(event)
@@ -197,14 +217,37 @@ class DetectionCoordinator:
                 logger.exception("monitoring_loop_error", camera=camera_name)
                 await asyncio.sleep(interval * 2)  # Back off on error
 
+    async def _retry_pending_fusion(
+        self,
+        camera_name: str,
+        state: CameraState,
+        pose,
+        timestamp: datetime,
+    ) -> tuple[FallDetectionEvent | None, bool]:
+        """Re-check a suppressed fall. Returns (alert_event, still_suppressed)."""
+        result, started = self._pending_fusion[camera_name]
+        if self._scorer.check_recovery(camera_name, pose):
+            self._pending_fusion.pop(camera_name)
+            logger.info("pending_fusion_cleared_recovery", camera=camera_name)
+            return None, False
+        if (timestamp - started).total_seconds() > self._settings.fusion_window_seconds:
+            self._pending_fusion.pop(camera_name)
+            logger.info("pending_fusion_expired", camera=camera_name)
+            return None, False
+        event = await self._handle_confirmed_fall(camera_name, state, result, timestamp)
+        if event is None:
+            return None, True
+        self._pending_fusion.pop(camera_name)
+        return event, False
+
     async def _handle_confirmed_fall(
         self,
         camera_name: str,
         state: CameraState,
         result,
         timestamp: datetime,
-    ) -> None:
-        """Handle a confirmed fall detection."""
+    ) -> FallDetectionEvent | None:
+        """Handle a confirmed fall. Returns the alert event, or None if fusion suppressed it."""
         reason_codes = list(result.reason_codes)
         confidence = result.confidence
         mode = self._settings.fusion_mode
@@ -217,10 +260,8 @@ class DetectionCoordinator:
                 # Fail open: an unreachable sensor must never hide a real fall
                 reason_codes.append(ReasonCode.SENSOR_UNAVAILABLE)
             elif mode == "require":
-                # Not confirmed yet; the scorer re-confirms next frame so a
-                # lagging sensor can still corroborate while the person is down.
                 logger.info("fall_suppressed_by_fusion", camera=camera_name, confidence=confidence)
-                return
+                return None
 
         self._total_events += 1
 
@@ -257,6 +298,8 @@ class DetectionCoordinator:
                     await cb(event)
                 except Exception:
                     logger.exception("alert_callback_error")
+
+        return event
 
     async def _handle_recovery(self, camera_name: str, state: CameraState) -> None:
         """Handle recovery detection."""
@@ -312,6 +355,7 @@ class DetectionCoordinator:
         state.alert_acknowledged = False
         state.consecutive_fall_frames = 0
         state.fall_candidate_start = None
+        self._pending_fusion.pop(camera_name, None)
         state.cooldown_until = None
         state.error_count = 0
         self._scorer.reset_camera(camera_name)

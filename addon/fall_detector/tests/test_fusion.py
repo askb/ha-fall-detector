@@ -122,3 +122,82 @@ async def test_fusion_off_skips_sensor(settings):
     await coord._handle_confirmed_fall("living_room", coord.camera_states["living_room"], _result(), datetime.utcnow())
     assert len(alerts) == 1
     coord._fusion.corroborate.assert_not_called()
+
+
+def _score(stage: DetectionStage, should_alert: bool = False) -> ScoreResult:
+    return ScoreResult(
+        stage=stage,
+        confidence=0.8 if should_alert else 0.6,
+        reason_codes=[ReasonCode.PRONE_DWELL] if should_alert else [],
+        should_alert=should_alert,
+        pose_summary=PoseSummary(),
+        motion_summary=MotionSummary(),
+    )
+
+
+async def _run_loop(settings, scores, sensor, recovery=None, step_seconds=0.0):
+    """Drive _monitor_camera for len(scores) frames; return (alerts, events, coordinator)."""
+    settings.frame_sample_rate = 30.0
+    coord, alerts = _coordinator(settings, "require", None)
+    coord._fusion.corroborate = AsyncMock(side_effect=sensor)
+    coord._pose_estimator.estimate_pose = AsyncMock(return_value=PoseSummary())
+    coord._scorer = MagicMock()
+    coord._scorer.score_frame.side_effect = scores
+    coord._scorer.check_recovery.side_effect = recovery or [False] * len(scores)
+
+    start = datetime.utcnow()
+    frames = iter(range(len(scores)))
+
+    async def get_frame(_camera):
+        i = next(frames, None)
+        if i is None or i == len(scores) - 1:
+            coord._running = False
+        return object(), start + timedelta(seconds=(i or 0) * step_seconds)
+
+    coord._frame_source.get_frame = get_frame
+    events: list = []
+
+    async def _ev(e):
+        events.append(e)
+
+    coord.on_event(_ev)
+    coord._running = True
+    await coord._monitor_camera("living_room")
+    return alerts, events, coord
+
+
+async def test_lagging_sensor_retried_after_scorer_drops(settings):
+    alerts, events, coord = await _run_loop(
+        settings,
+        scores=[_score(DetectionStage.CONFIRMED_FALL, True), _score(DetectionStage.POSE_ESTIMATED)],
+        sensor=[False, True],
+    )
+    assert len(alerts) == 1
+    assert ReasonCode.SENSOR_CONFIRMED in alerts[0].reason_codes
+    assert [e.stage for e in events] == [DetectionStage.FALL_CONFIRMING, DetectionStage.CONFIRMED_FALL]
+    assert events[1] is alerts[0]  # published event carries fusion metadata
+    assert "living_room" not in coord._pending_fusion
+
+
+async def test_pending_fusion_cleared_on_recovery(settings):
+    alerts, events, coord = await _run_loop(
+        settings,
+        scores=[_score(DetectionStage.CONFIRMED_FALL, True), _score(DetectionStage.POSE_ESTIMATED)],
+        sensor=[False, True],
+        recovery=[True],
+    )
+    assert alerts == []
+    assert DetectionStage.CONFIRMED_FALL not in [e.stage for e in events]
+    assert "living_room" not in coord._pending_fusion
+
+
+async def test_pending_fusion_expires(settings):
+    settings.fusion_window_seconds = 5
+    alerts, _, coord = await _run_loop(
+        settings,
+        scores=[_score(DetectionStage.CONFIRMED_FALL, True), _score(DetectionStage.POSE_ESTIMATED)],
+        sensor=[False, True],
+        step_seconds=10,
+    )
+    assert alerts == []
+    assert "living_room" not in coord._pending_fusion

@@ -215,8 +215,9 @@ class DetectionCoordinator:
                 event: FallDetectionEvent | None = alert_event
                 if event is None and result.stage not in (DetectionStage.REJECTED, DetectionStage.PERSON_DETECTED):
                     stage = result.stage
-                    if suppressed and stage == DetectionStage.CONFIRMED_FALL:
-                        # Not confirmed until the sensor agrees
+                    if suppressed:
+                        # Hold the confirming state until the sensor agrees so
+                        # later frames don't overwrite the retained MQTT state
                         stage = DetectionStage.FALL_CONFIRMING
                     event = FallDetectionEvent(
                         camera=camera_name,

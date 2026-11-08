@@ -319,3 +319,14 @@ async def test_recovery_beats_reconfirmed_score_while_pending(settings):
     assert all(e.stage != DetectionStage.CONFIRMED_FALL for e in events)
     assert "living_room" not in coord._pending_fusion
     assert len(calls) == 1
+
+
+async def test_pending_fall_keeps_confirming_state(settings):
+    """Frames after a suppressed fall must not overwrite the confirming state."""
+    alerts, events, _ = await _run_loop(
+        settings,
+        scores=[_score(DetectionStage.CONFIRMED_FALL, True), _score(DetectionStage.POSE_ESTIMATED)],
+        sensor=[False, False],
+    )
+    assert alerts == []
+    assert [e.stage for e in events] == [DetectionStage.FALL_CONFIRMING, DetectionStage.FALL_CONFIRMING]

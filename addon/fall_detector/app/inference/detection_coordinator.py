@@ -46,6 +46,7 @@ class DetectionCoordinator:
                 fall_confirmation_seconds=settings.fall_confirmation_seconds,
                 recovery_window_seconds=settings.recovery_window_seconds,
                 alert_cooldown_seconds=settings.alert_cooldown_seconds,
+                frame_interval_seconds=1.0 / max(settings.frame_sample_rate, 0.1),
             )
         )
         self._camera_states: dict[str, CameraState] = {}

@@ -364,6 +364,12 @@ stay stuck at `fall_confirming`. If the sensor is unreachable or `unavailable`, 
 **sent anyway** with `SENSOR_UNAVAILABLE`, because missing a real fall is worse
 than a false alarm.
 
+Rooms with a radar but no camera (bathroom, toilet, hallway) can alert
+straight from the radar; see
+[`examples/automation_radar_fall.yaml`](examples/automation_radar_fall.yaml).
+Fall mode covers a small area (FP2: ~2 m radius; MR60FDA2: ~3×3 m, both
+ceiling-mounted), so plan one sensor per high-risk room.
+
 ### Integration Options
 
 These are configured through the HA config flow UI:

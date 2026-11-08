@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: Apache-2.0
+# Fall Detection - mmWave radar rooms (no camera)
+#
+# Alerts directly from ceiling radar fall sensors in rooms without a camera
+# (bathroom, toilet, hallway). Rooms that also have a camera should link the
+# radar via fusion_sensors instead, so one fall does not alert twice.
+#
+# Replace the entity IDs with your own; names depend on the integration:
+#   Aqara FP2 (HomeKit / Aqara):  binary_sensor.<room>_fp2_fall  (example)
+#   Seeed MR60FDA2 (ESPHome):     binary_sensor.<room>_fall_detected  (example)
+---
+alias: "Fall Detector: Radar Alert"
+description: "Push a critical alert when a ceiling radar reports a fall"
+trigger:
+  - platform: state
+    entity_id:
+      - binary_sensor.bathroom_fall_detected
+      - binary_sensor.toilet_fall_detected
+      - binary_sensor.hallway_fall_detected
+      - binary_sensor.bedroom_fp2_fall
+    to: "on"
+    # Ignore sub-second radar blips
+    for: "00:00:03"
+action:
+  - service: notify.mobile_app_caregivers_phone
+    data:
+      title: "⚠️ Fall Detected!"
+      message: >-
+        {{ trigger.to_state.name }} reported a fall
+        at {{ now().strftime('%H:%M:%S') }}.
+      data:
+        tag: "fall-alert-{{ trigger.entity_id }}"
+        importance: high
+        channel: fall_alerts
+        # iOS: bypass Do Not Disturb / silent mode
+        push:
+          sound:
+            name: default
+            critical: 1
+            volume: 1.0
+        actions:
+          - action: "ACKNOWLEDGE_FALL"
+            title: "✅ Acknowledge"
+          - action: "CALL_EMERGENCY"
+            title: "🚨 Call Emergency"
+mode: parallel

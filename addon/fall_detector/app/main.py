@@ -278,7 +278,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="Fall Detector API",
     description="AI-powered elderly fall detection for Home Assistant",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 

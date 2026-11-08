@@ -10,6 +10,7 @@ on:
       - "v*"
     paths:
       - "addon/**"
+      - ".github/workflows/addon-build.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

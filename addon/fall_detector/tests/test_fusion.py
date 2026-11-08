@@ -29,17 +29,19 @@ def _state(state: str, age_seconds: float = 3600) -> dict:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("payload", "status", "expected"),
+    ("state", "age_seconds", "status", "expected"),
     [
-        (_state("on"), 200, True),
-        (_state("off", age_seconds=10), 200, True),  # pulsed recently
-        (_state("off", age_seconds=600), 200, False),
-        (_state("unavailable"), 200, None),
-        ({}, 404, None),
+        ("on", 3600, 200, True),
+        ("off", 10, 200, True),  # pulsed recently
+        ("off", 600, 200, False),
+        ("unavailable", 3600, 200, None),
+        (None, 0, 404, None),
     ],
 )
 @respx.mock
-async def test_corroborate(payload, status, expected):
+async def test_corroborate(state, age_seconds, status, expected):
+    # Build timestamps at run time so suite duration cannot age them past the window
+    payload = _state(state, age_seconds) if state else {}
     respx.get(f"{HA}/api/states/{ENTITY}").mock(return_value=httpx.Response(status, json=payload))
     fusion = _fusion()
     assert await fusion.corroborate("living_room") is expected
@@ -235,7 +237,7 @@ async def test_alert_on_confirmed_frame_clears_pending(settings):
 async def test_expiry_checked_on_confirmed_frames(settings):
     """A still-confirmed fall past the window must not alert on a late sensor."""
     settings.fusion_window_seconds = 5
-    alerts, events, coord = await _run_loop(
+    alerts, _, coord = await _run_loop(
         settings,
         scores=[_score(DetectionStage.CONFIRMED_FALL, True), _score(DetectionStage.CONFIRMED_FALL, True)],
         sensor=[False, True],

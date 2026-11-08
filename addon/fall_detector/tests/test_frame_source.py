@@ -87,6 +87,19 @@ class TestHomeAssistantFrameSource:
 
     @pytest.mark.asyncio
     @respx.mock
+    async def test_without_token_sends_no_auth_header(self, monkeypatch):
+        monkeypatch.delenv("SUPERVISOR_TOKEN", raising=False)
+        route = respx.get("http://ha.local/api/camera_proxy/camera.hall").mock(
+            return_value=Response(200, content=_jpeg_bytes())
+        )
+        source = HomeAssistantFrameSource(ha_url="http://ha.local")
+        frame, _ = await source.get_frame("camera.hall")
+        assert frame is not None
+        assert "authorization" not in route.calls.last.request.headers
+        await source.close()
+
+    @pytest.mark.asyncio
+    @respx.mock
     async def test_http_error_returns_none(self):
         respx.get("http://ha.local/api/camera_proxy/camera.down").mock(return_value=Response(502))
         source = HomeAssistantFrameSource(ha_url="http://ha.local", token="t")

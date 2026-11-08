@@ -39,8 +39,8 @@ action:
             critical: 1
             volume: 1.0
         actions:
-          - action: "ACKNOWLEDGE_FALL"
-            title: "✅ Acknowledge"
-          - action: "CALL_EMERGENCY"
-            title: "🚨 Call Emergency"
+          # URI actions are handled by the Companion app itself; no automation needed
+          - action: "URI"
+            title: "📞 Call them"
+            uri: "tel:+10000000000"  # replace with the monitored person's number
 mode: parallel

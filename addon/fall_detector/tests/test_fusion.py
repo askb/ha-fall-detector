@@ -58,6 +58,18 @@ async def test_corroborate_network_error_fails_open():
     await fusion.close()
 
 
+@pytest.mark.asyncio
+@respx.mock
+async def test_corroborate_without_token_sends_no_auth_header(monkeypatch):
+    # "Bearer " with an empty token is an illegal header value and fails every query
+    monkeypatch.delenv("SUPERVISOR_TOKEN", raising=False)
+    route = respx.get(f"{HA}/api/states/{ENTITY}").mock(return_value=httpx.Response(200, json=_state("on")))
+    fusion = SensorFusion(sensors={"living_room": ENTITY}, ha_url=HA)
+    assert await fusion.corroborate("living_room") is True
+    assert "authorization" not in route.calls.last.request.headers
+    await fusion.close()
+
+
 def test_fusion_sensor_map(settings):
     settings.fusion_sensors = ["living_room|binary_sensor.fp2_fall", "bad-entry", " hall | binary_sensor.x "]
     assert settings.fusion_sensor_map() == {

@@ -107,7 +107,7 @@ class HomeAssistantFrameSource(FrameSource):
         if self._client is None or self._client.is_closed:
             self._client = httpx.AsyncClient(
                 timeout=self._timeout,
-                headers={"Authorization": f"Bearer {self._token}"},
+                headers={"Authorization": f"Bearer {self._token}"} if self._token else {},
             )
         return self._client
 

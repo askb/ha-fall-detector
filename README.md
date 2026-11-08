@@ -335,6 +335,31 @@ camera_overrides:
     confirmation_seconds: 5.0
 ```
 
+### Sensor Fusion (mmWave Radar)
+
+Cross-check camera falls against a Home Assistant entity in the same room,
+for example an mmWave radar fall sensor (Seeed MR60FDA2 via ESPHome, Aqara
+FP2) or any `binary_sensor`.
+
+| Option | Default | Description |
+|---|---|---|
+| `fusion_mode` | `off` | `off`: camera only. `boost`: alert as usual; add `SENSOR_CONFIRMED` and +0.1 confidence when the sensor agrees. `require`: only alert when the sensor agrees |
+| `fusion_sensors` | `[]` | `camera\|entity_id` pairs, e.g. `living_room\|binary_sensor.living_room_fall` |
+| `fusion_window_seconds` | `60` | A sensor that changed state within this window counts as agreeing (radar sensors pulse briefly) |
+
+```yaml
+fusion_mode: "require"
+fusion_sensors:
+  - "living_room|binary_sensor.living_room_radar_fall"
+```
+
+The sensor agrees when its state is `on`/`detected`/`fall`, or when it
+changed within the window. In `require` mode an unconfirmed fall is re-checked
+on every frame while the person stays down, so a lagging sensor can still
+confirm it. If the sensor is unreachable or `unavailable`, the alert is
+**sent anyway** with `SENSOR_UNAVAILABLE`, because missing a real fall is worse
+than a false alarm.
+
 ### Integration Options
 
 These are configured through the HA config flow UI:

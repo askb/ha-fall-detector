@@ -144,11 +144,22 @@ class AppState:
                 model_dir=f"{self.settings.fall_detector_data_path}/models",
             )
 
+        fusion = None
+        if self.settings.fusion_mode != "off" and self.settings.fusion_sensors:
+            from app.fusion import SensorFusion
+
+            fusion = SensorFusion(
+                sensors=self.settings.fusion_sensor_map(),
+                window_seconds=self.settings.fusion_window_seconds,
+                ha_url=self.settings.ha_url,
+            )
+
         # Detection coordinator
         self.coordinator = DetectionCoordinator(
             settings=self.settings,
             frame_source=self.frame_source,
             pose_estimator=pose_estimator,
+            fusion=fusion,
         )
 
         # MQTT publisher

@@ -38,6 +38,9 @@ options:
   fall_confirmation_seconds: 5
   recovery_window_seconds: 30
   alert_cooldown_seconds: 120
+  fusion_mode: "off"
+  fusion_sensors: []
+  fusion_window_seconds: 60
   snapshot_on_alert: true
   clip_on_alert: false
   retain_debug_frames: false
@@ -60,6 +63,10 @@ schema:
   fall_confirmation_seconds: int
   recovery_window_seconds: int
   alert_cooldown_seconds: int
+  fusion_mode: list(off|boost|require)
+  fusion_sensors:
+    - str?
+  fusion_window_seconds: int(1,600)
   snapshot_on_alert: bool
   clip_on_alert: bool
   retain_debug_frames: bool

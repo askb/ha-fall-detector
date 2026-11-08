@@ -9,6 +9,7 @@ from collections import deque
 from datetime import datetime, timedelta
 
 from app.config.settings import Settings
+from app.fusion import SensorFusion
 from app.inference.fall_scorer import FallScorer, ScoringConfig
 from app.inference.frame_source import FrameSource
 from app.inference.pose_estimator import PoseEstimator
@@ -32,10 +33,12 @@ class DetectionCoordinator:
         settings: Settings,
         frame_source: FrameSource,
         pose_estimator: PoseEstimator,
+        fusion: SensorFusion | None = None,
     ):
         self._settings = settings
         self._frame_source = frame_source
         self._pose_estimator = pose_estimator
+        self._fusion = fusion
         self._scorer = FallScorer(
             config=ScoringConfig(
                 confidence_threshold=settings.detection_confidence_threshold,
@@ -113,6 +116,8 @@ class DetectionCoordinator:
                 await task
             logger.info("camera_monitoring_stopped", camera=name)
         self._tasks.clear()
+        if self._fusion:
+            await self._fusion.close()
 
     async def _monitor_camera(self, camera_name: str) -> None:
         """Continuous monitoring loop for a single camera."""
@@ -200,16 +205,33 @@ class DetectionCoordinator:
         timestamp: datetime,
     ) -> None:
         """Handle a confirmed fall detection."""
+        reason_codes = list(result.reason_codes)
+        confidence = result.confidence
+        mode = self._settings.fusion_mode
+        if mode != "off" and self._fusion and self._fusion.has_sensor(camera_name):
+            agrees = await self._fusion.corroborate(camera_name)
+            if agrees:
+                reason_codes.append(ReasonCode.SENSOR_CONFIRMED)
+                confidence = min(confidence + 0.1, 1.0)
+            elif agrees is None:
+                # Fail open: an unreachable sensor must never hide a real fall
+                reason_codes.append(ReasonCode.SENSOR_UNAVAILABLE)
+            elif mode == "require":
+                # Not confirmed yet; the scorer re-confirms next frame so a
+                # lagging sensor can still corroborate while the person is down.
+                logger.info("fall_suppressed_by_fusion", camera=camera_name, confidence=confidence)
+                return
+
         self._total_events += 1
 
         event = FallDetectionEvent(
             camera=camera_name,
             timestamp=timestamp,
-            confidence=result.confidence,
+            confidence=confidence,
             stage=DetectionStage.CONFIRMED_FALL,
             pose_summary=result.pose_summary,
             motion_summary=result.motion_summary,
-            reason_codes=result.reason_codes,
+            reason_codes=reason_codes,
         )
 
         state.active_alert = True

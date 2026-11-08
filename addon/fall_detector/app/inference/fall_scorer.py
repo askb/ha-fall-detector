@@ -39,6 +39,9 @@ class ScoringConfig:
     # A descent counts for the confirmation period plus this grace, so a
     # person lying still after falling keeps scoring as a fall
     descent_latch_grace_seconds: float = 10.0
+    # Seconds between sampled frames; the latch also covers the frames needed
+    # to become a candidate and reach confirmation at slow sample rates
+    frame_interval_seconds: float = 0.0
 
 
 @dataclass
@@ -120,7 +123,11 @@ class FallScorer:
         elif self._is_upright(pose):
             self._descent_at.pop(camera_name, None)
         descent_at = self._descent_at.get(camera_name)
-        latch = self._config.fall_confirmation_seconds + self._config.descent_latch_grace_seconds
+        latch = (
+            self._config.fall_confirmation_seconds
+            + self._config.descent_latch_grace_seconds
+            + (self._config.min_candidate_frames + 1) * self._config.frame_interval_seconds
+        )
         if descent_at is not None and (now - descent_at).total_seconds() <= latch:
             confidence += 0.25
             reason_codes.append(ReasonCode.RAPID_DESCENT)

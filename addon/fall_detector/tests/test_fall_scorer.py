@@ -3,7 +3,8 @@
 
 from datetime import datetime, timedelta
 
-from app.inference.fall_scorer import FallScorer
+from app.inference import fall_scorer as fall_scorer_module
+from app.inference.fall_scorer import FallScorer, ScoringConfig
 from app.models import (
     CameraState,
     DetectionStage,
@@ -234,3 +235,22 @@ class TestDescentLatch:
         fall_scorer.score_frame("test_camera", self.DESCENT, camera_state)
         fall_scorer.reset_camera("test_camera")
         assert "test_camera" not in fall_scorer._descent_at
+
+    def test_latch_covers_slow_sample_rate(self, camera_state: CameraState, monkeypatch):
+        # At frame_sample_rate=0.1 frames are 10s apart, so candidate collection
+        # alone outlasts confirmation + grace
+        clock = {"now": datetime(2026, 1, 1)}
+
+        class _Clock(datetime):
+            @classmethod
+            def utcnow(cls):
+                return clock["now"]
+
+        monkeypatch.setattr(fall_scorer_module, "datetime", _Clock)
+        scorer = FallScorer(ScoringConfig(fall_confirmation_seconds=5, frame_interval_seconds=10.0))
+        results = []
+        for pose in [self.UPRIGHT, self.DESCENT] + [self.PRONE] * 4:
+            results.append(scorer.score_frame("test_camera", pose, camera_state))
+            clock["now"] += timedelta(seconds=10)
+        assert results[-1].stage == DetectionStage.CONFIRMED_FALL
+        assert results[-1].should_alert

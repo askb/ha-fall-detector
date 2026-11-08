@@ -36,6 +36,9 @@ class ScoringConfig:
     rapid_descent_threshold: float = 0.15  # normalized velocity
     # Minimum consecutive frames for candidate
     min_candidate_frames: int = 3
+    # A descent counts for the confirmation period plus this grace, so a
+    # person lying still after falling keeps scoring as a fall
+    descent_latch_grace_seconds: float = 10.0
 
 
 @dataclass
@@ -57,6 +60,7 @@ class FallScorer:
         self._config = config or ScoringConfig()
         self._previous_poses: dict[str, list[PoseSummary]] = {}
         self._pose_history_limit = 30
+        self._descent_at: dict[str, datetime] = {}
 
     def score_frame(
         self,
@@ -109,8 +113,15 @@ class FallScorer:
             confidence += 0.25
             reason_codes.append(ReasonCode.ASPECT_RATIO_CHANGE)
 
-        # Check rapid descent
+        # Check rapid descent (latched: the descent is transient, the dwell is not)
+        now = datetime.utcnow()
         if motion.is_rapid_descent:
+            self._descent_at[camera_name] = now
+        elif self._is_upright(pose):
+            self._descent_at.pop(camera_name, None)
+        descent_at = self._descent_at.get(camera_name)
+        latch = self._config.fall_confirmation_seconds + self._config.descent_latch_grace_seconds
+        if descent_at is not None and (now - descent_at).total_seconds() <= latch:
             confidence += 0.25
             reason_codes.append(ReasonCode.RAPID_DESCENT)
 
@@ -118,7 +129,6 @@ class FallScorer:
         confidence = min(confidence, 1.0)
 
         # Determine stage
-        now = datetime.utcnow()
 
         # Check cooldown
         if camera_state.cooldown_until and now < camera_state.cooldown_until:
@@ -199,6 +209,15 @@ class FallScorer:
             return True
         return bool(pose.body_aspect_ratio is not None and pose.body_aspect_ratio > self._config.standing_aspect_min)
 
+    def _is_upright(self, pose: PoseSummary) -> bool:
+        """Strict upright check (both cues) so noisy lying poses keep the descent latch."""
+        return (
+            pose.torso_angle is not None
+            and pose.torso_angle > self._config.upright_angle_min
+            and pose.body_aspect_ratio is not None
+            and pose.body_aspect_ratio > self._config.standing_aspect_min
+        )
+
     def _analyze_motion(self, camera_name: str) -> MotionSummary:
         """Analyze motion from pose history."""
         history = self._previous_poses.get(camera_name, [])
@@ -218,7 +237,8 @@ class FallScorer:
             angle_change = previous.torso_angle - current.torso_angle
             velocity = abs(angle_change) / 90.0  # Normalize
             vertical_displacement = angle_change / 90.0
-            is_rapid = velocity > self._config.rapid_descent_threshold
+            # Only downward motion is a descent; standing up quickly is not
+            is_rapid = vertical_displacement > self._config.rapid_descent_threshold
 
         direction = "unknown"
         if vertical_displacement > 0.05:
@@ -238,3 +258,4 @@ class FallScorer:
     def reset_camera(self, camera_name: str) -> None:
         """Reset scoring state for a camera."""
         self._previous_poses.pop(camera_name, None)
+        self._descent_at.pop(camera_name, None)

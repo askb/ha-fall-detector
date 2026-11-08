@@ -184,3 +184,53 @@ class TestFalsePositiveRegression:
         result = fall_scorer.score_frame("test_camera", low_conf_pose, camera_state)
         # Should still score based on angle/ratio but overall result may vary
         assert result.stage != DetectionStage.CONFIRMED_FALL
+
+
+class TestDescentLatch:
+    """A fall is a descent followed by lying still; the descent frame is transient."""
+
+    UPRIGHT = PoseSummary(torso_angle=85.0, body_aspect_ratio=3.0, pose_confidence=0.9)
+    DESCENT = PoseSummary(torso_angle=60.0, body_aspect_ratio=2.0, pose_confidence=0.9)
+    PRONE = PoseSummary(torso_angle=10.0, body_aspect_ratio=0.7, pose_confidence=0.9)
+
+    def _score_prone(self, scorer, state, frames=4):
+        results = [scorer.score_frame("test_camera", self.PRONE, state) for _ in range(frames)]
+        # Pretend the confirmation period has elapsed
+        state.fall_candidate_start = datetime.utcnow() - timedelta(seconds=60)
+        results.append(scorer.score_frame("test_camera", self.PRONE, state))
+        return results
+
+    def test_still_after_descent_confirms(self, fall_scorer: FallScorer, camera_state: CameraState):
+        fall_scorer.score_frame("test_camera", self.UPRIGHT, camera_state)
+        fall_scorer.score_frame("test_camera", self.DESCENT, camera_state)
+        final = self._score_prone(fall_scorer, camera_state)[-1]
+        assert final.stage == DetectionStage.CONFIRMED_FALL
+        assert final.should_alert
+        assert ReasonCode.RAPID_DESCENT in final.reason_codes
+
+    def test_lying_down_slowly_never_confirms(self, fall_scorer: FallScorer, camera_state: CameraState):
+        assert not any(r.should_alert for r in self._score_prone(fall_scorer, camera_state))
+
+    def test_standing_up_quickly_is_not_a_descent(self, fall_scorer: FallScorer, camera_state: CameraState):
+        fall_scorer.score_frame("test_camera", self.PRONE, camera_state)
+        result = fall_scorer.score_frame("test_camera", self.UPRIGHT, camera_state)
+        assert ReasonCode.RAPID_DESCENT not in result.reason_codes
+        assert "test_camera" not in fall_scorer._descent_at
+
+    def test_upright_clears_latch(self, fall_scorer: FallScorer, camera_state: CameraState):
+        fall_scorer.score_frame("test_camera", self.UPRIGHT, camera_state)
+        fall_scorer.score_frame("test_camera", self.DESCENT, camera_state)
+        fall_scorer.score_frame("test_camera", PoseSummary(torso_angle=80.0, body_aspect_ratio=2.5), camera_state)
+        assert "test_camera" not in fall_scorer._descent_at
+
+    def test_latch_expires(self, fall_scorer: FallScorer, camera_state: CameraState):
+        fall_scorer.score_frame("test_camera", self.UPRIGHT, camera_state)
+        fall_scorer.score_frame("test_camera", self.PRONE, camera_state)  # descent latched
+        fall_scorer._descent_at["test_camera"] -= timedelta(seconds=3600)
+        assert not any(r.should_alert for r in self._score_prone(fall_scorer, camera_state))
+
+    def test_reset_clears_latch(self, fall_scorer: FallScorer, camera_state: CameraState):
+        fall_scorer.score_frame("test_camera", self.UPRIGHT, camera_state)
+        fall_scorer.score_frame("test_camera", self.DESCENT, camera_state)
+        fall_scorer.reset_camera("test_camera")
+        assert "test_camera" not in fall_scorer._descent_at

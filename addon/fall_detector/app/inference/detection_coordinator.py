@@ -17,6 +17,7 @@ from app.models import (
     CameraState,
     DetectionStage,
     FallDetectionEvent,
+    PoseSummary,
     ReasonCode,
     SystemStatus,
 )
@@ -155,14 +156,20 @@ class DetectionCoordinator:
                     if state.fall_candidate_start is not None:
                         state.consecutive_fall_frames = 0
                         state.fall_candidate_start = None
-                    self._pending_fusion.pop(camera_name, None)
+                    if self._pending_fusion.pop(camera_name, None):
+                        await self._publish_pending_cancelled(
+                            camera_name, timestamp, DetectionStage.REJECTED, ReasonCode.PERSON_GATE_FAILED
+                        )
                     await asyncio.sleep(interval)
                     continue
 
                 state.last_person_detected = timestamp
 
                 # Expire before scoring so the cooldown also rejects this frame
-                self._expire_pending_fusion(camera_name, state, timestamp)
+                if self._expire_pending_fusion(camera_name, state, timestamp):
+                    await self._publish_pending_cancelled(
+                        camera_name, timestamp, DetectionStage.REJECTED, ReasonCode.SENSOR_NOT_CONFIRMED, pose
+                    )
 
                 # Score frame
                 result = self._scorer.score_frame(
@@ -183,6 +190,9 @@ class DetectionCoordinator:
                     state.consecutive_fall_frames = 0
                     state.fall_candidate_start = None
                     logger.info("pending_fusion_cleared_recovery", camera=camera_name)
+                    await self._publish_pending_cancelled(
+                        camera_name, timestamp, DetectionStage.RECOVERY_DETECTED, ReasonCode.RECOVERY_MOVEMENT, pose
+                    )
                     await asyncio.sleep(interval)
                     continue
 
@@ -229,11 +239,7 @@ class DetectionCoordinator:
                         reason_codes=result.reason_codes,
                     )
                 if event is not None:
-                    for cb in self._event_callbacks:
-                        try:
-                            await cb(event)
-                        except Exception:
-                            logger.exception("event_callback_error")
+                    await self._emit(event)
 
                 await asyncio.sleep(interval)
 
@@ -243,7 +249,36 @@ class DetectionCoordinator:
                 logger.exception("monitoring_loop_error", camera=camera_name)
                 await asyncio.sleep(interval * 2)  # Back off on error
 
-    def _expire_pending_fusion(self, camera_name: str, state: CameraState, timestamp: datetime) -> None:
+    async def _emit(self, event: FallDetectionEvent) -> None:
+        for cb in self._event_callbacks:
+            try:
+                await cb(event)
+            except Exception:
+                logger.exception("event_callback_error")
+
+    async def _publish_pending_cancelled(
+        self,
+        camera_name: str,
+        timestamp: datetime,
+        stage: DetectionStage,
+        reason: ReasonCode,
+        pose=None,
+    ) -> None:
+        """Publish a terminal event so consumers leave the retained FALL_CONFIRMING state."""
+        await self._emit(
+            FallDetectionEvent(
+                camera=camera_name,
+                timestamp=timestamp,
+                confidence=0.0,
+                stage=stage,
+                person_detected=pose is not None,
+                pose_summary=pose or PoseSummary(),
+                recovery_detected=stage == DetectionStage.RECOVERY_DETECTED,
+                reason_codes=[reason],
+            )
+        )
+
+    def _expire_pending_fusion(self, camera_name: str, state: CameraState, timestamp: datetime) -> bool:
         """Drop a pending fall the sensor never confirmed within the window.
 
         The camera then cools down and the candidate is re-armed, so the same
@@ -251,12 +286,13 @@ class DetectionCoordinator:
         """
         pending = self._pending_fusion.get(camera_name)
         if not pending or (timestamp - pending[1]).total_seconds() <= self._settings.fusion_window_seconds:
-            return
+            return False
         self._pending_fusion.pop(camera_name)
         state.consecutive_fall_frames = 0
         state.fall_candidate_start = None
         state.cooldown_until = datetime.utcnow() + timedelta(seconds=self._settings.alert_cooldown_seconds)
         logger.info("pending_fusion_expired", camera=camera_name)
+        return True
 
     async def _retry_pending_fusion(
         self,

@@ -357,7 +357,10 @@ The sensor agrees when its state is `on`/`detected`/`fall`, or when it
 changed within the window. In `require` mode an unconfirmed fall is published
 as `fall_confirming` and re-checked on every frame until the sensor agrees, the
 person recovers or leaves view, or `fusion_window_seconds` passes (the camera
-then enters its normal alert cooldown), so a lagging sensor can still confirm it. If the sensor is unreachable or `unavailable`, the alert is
+then enters its normal alert cooldown), so a lagging sensor can still confirm it.
+A cancelled pending fall publishes a final `recovery_detected` or `rejected`
+event (`PERSON_GATE_FAILED` / `SENSOR_NOT_CONFIRMED`), so MQTT consumers never
+stay stuck at `fall_confirming`. If the sensor is unreachable or `unavailable`, the alert is
 **sent anyway** with `SENSOR_UNAVAILABLE`, because missing a real fall is worse
 than a false alarm.
 

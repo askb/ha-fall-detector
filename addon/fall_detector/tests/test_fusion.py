@@ -138,15 +138,21 @@ def _score(stage: DetectionStage, should_alert: bool = False) -> ScoreResult:
 
 
 async def _run_loop(settings, scores, sensor, recovery=None, step_seconds=0.0, mode="require", holder=None):
-    """Drive _monitor_camera for len(scores) frames; return (alerts, events, coordinator)."""
+    """Drive _monitor_camera for len(scores) frames; return (alerts, events, coordinator).
+
+    A None entry in scores simulates a frame with no person in view.
+    """
     settings.frame_sample_rate = 30.0
     coord, alerts = _coordinator(settings, mode, None)
     if holder is not None:
         holder["coord"] = coord
     coord._fusion.corroborate = AsyncMock(side_effect=sensor)
-    coord._pose_estimator.estimate_pose = AsyncMock(return_value=PoseSummary())
+    # A None score means no person in that frame
+    coord._pose_estimator.estimate_pose = AsyncMock(
+        side_effect=[None if sc is None else PoseSummary() for sc in scores]
+    )
     coord._scorer = MagicMock()
-    queued = iter(scores)
+    queued = iter([sc for sc in scores if sc is not None])
 
     def score_frame(camera_name, pose, camera_state, person_detected):
         nxt = next(queued)
@@ -330,3 +336,40 @@ async def test_pending_fall_keeps_confirming_state(settings):
     )
     assert alerts == []
     assert [e.stage for e in events] == [DetectionStage.FALL_CONFIRMING, DetectionStage.FALL_CONFIRMING]
+
+
+@pytest.mark.parametrize(
+    ("second", "recovery", "step", "stage", "reason"),
+    [
+        (None, [], 0.0, DetectionStage.REJECTED, ReasonCode.PERSON_GATE_FAILED),
+        (
+            _score(DetectionStage.POSE_ESTIMATED),
+            [True],
+            0.0,
+            DetectionStage.RECOVERY_DETECTED,
+            ReasonCode.RECOVERY_MOVEMENT,
+        ),
+        (
+            _score(DetectionStage.POSE_ESTIMATED),
+            [False],
+            120.0,
+            DetectionStage.REJECTED,
+            ReasonCode.SENSOR_NOT_CONFIRMED,
+        ),
+    ],
+    ids=["person_left", "recovered", "window_expired"],
+)
+async def test_cancelled_pending_fall_publishes_terminal_event(settings, second, recovery, step, stage, reason):
+    """Consumers must not be left in the retained FALL_CONFIRMING state."""
+    alerts, events, coord = await _run_loop(
+        settings,
+        scores=[_score(DetectionStage.CONFIRMED_FALL, True), second],
+        sensor=[False, False],
+        recovery=recovery,
+        step_seconds=step,
+    )
+    assert alerts == []
+    assert "living_room" not in coord._pending_fusion
+    assert events[0].stage == DetectionStage.FALL_CONFIRMING
+    assert events[-1].stage == stage
+    assert events[-1].reason_codes == [reason]

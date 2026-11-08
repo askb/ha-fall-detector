@@ -149,6 +149,9 @@ async def _run_loop(settings, scores, sensor, recovery=None, step_seconds=0.0):
         # Mirror the real scorer: cooldown rejects the frame
         if camera_state.cooldown_until and datetime.utcnow() < camera_state.cooldown_until:
             return _score(DetectionStage.REJECTED)
+        if nxt.should_alert:
+            camera_state.consecutive_fall_frames += 1
+            camera_state.fall_candidate_start = camera_state.fall_candidate_start or datetime.utcnow()
         return nxt
 
     coord._scorer.score_frame.side_effect = score_frame
@@ -241,3 +244,29 @@ async def test_expiry_checked_on_confirmed_frames(settings):
     state = coord.camera_states["living_room"]
     assert state.cooldown_until is not None
     assert state.fall_candidate_start is None
+
+
+async def test_reset_during_sensor_query_discards_alert(settings):
+    coord, alerts = _coordinator(settings, "boost", True)
+
+    async def slow_corroborate(camera):
+        coord.reset_camera_state(camera)  # user resets while the query is in flight
+        return True
+
+    coord._fusion.corroborate = AsyncMock(side_effect=slow_corroborate)
+    state = coord.camera_states["living_room"]
+    assert await coord._handle_confirmed_fall("living_room", state, _result(), datetime.utcnow()) is None
+    assert alerts == []
+    assert state.active_alert is False
+
+
+async def test_recovery_clears_candidate_state(settings):
+    _, _, coord = await _run_loop(
+        settings,
+        scores=[_score(DetectionStage.CONFIRMED_FALL, True), _score(DetectionStage.POSE_ESTIMATED)],
+        sensor=[False],
+        recovery=[True],
+    )
+    state = coord.camera_states["living_room"]
+    assert state.fall_candidate_start is None
+    assert state.consecutive_fall_frames == 0

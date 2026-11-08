@@ -53,6 +53,8 @@ class DetectionCoordinator:
         self._tasks: dict[str, asyncio.Task] = {}
         # Camera-confirmed falls awaiting sensor corroboration (require mode)
         self._pending_fusion: dict[str, tuple[ScoreResult, datetime]] = {}
+        # Bumped on reset so an in-flight sensor query cannot resurrect an alert
+        self._generation: dict[str, int] = {}
         self._start_time = datetime.utcnow()
         self._total_events = 0
         self._notifications_muted = False
@@ -248,6 +250,8 @@ class DetectionCoordinator:
         result, _ = self._pending_fusion[camera_name]
         if self._scorer.check_recovery(camera_name, pose):
             self._pending_fusion.pop(camera_name)
+            state.consecutive_fall_frames = 0
+            state.fall_candidate_start = None
             logger.info("pending_fusion_cleared_recovery", camera=camera_name)
             return None, False
         event = await self._handle_confirmed_fall(camera_name, state, result, timestamp)
@@ -268,7 +272,11 @@ class DetectionCoordinator:
         confidence = result.confidence
         mode = self._settings.fusion_mode
         if mode != "off" and self._fusion and self._fusion.has_sensor(camera_name):
+            generation = self._generation.get(camera_name, 0)
             agrees = await self._fusion.corroborate(camera_name)
+            if self._generation.get(camera_name, 0) != generation:
+                logger.info("fall_discarded_after_reset", camera=camera_name)
+                return None
             if agrees:
                 reason_codes.append(ReasonCode.SENSOR_CONFIRMED)
                 confidence = min(confidence + 0.1, 1.0)
@@ -372,6 +380,7 @@ class DetectionCoordinator:
         state.consecutive_fall_frames = 0
         state.fall_candidate_start = None
         self._pending_fusion.pop(camera_name, None)
+        self._generation[camera_name] = self._generation.get(camera_name, 0) + 1
         state.cooldown_until = None
         state.error_count = 0
         self._scorer.reset_camera(camera_name)

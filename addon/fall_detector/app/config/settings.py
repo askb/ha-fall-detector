@@ -56,6 +56,13 @@ class Settings(BaseSettings):
     recovery_window_seconds: int = Field(default=30, ge=1, le=600)
     alert_cooldown_seconds: int = Field(default=120, ge=0, le=3600)
 
+    # --- Sensor fusion ---
+    # off: camera only | boost: tag alerts the sensor agrees with
+    # require: suppress camera alerts the sensor does not confirm
+    fusion_mode: Literal["off", "boost", "require"] = "off"
+    fusion_sensors: list[str] = Field(default_factory=list)  # "camera|entity_id" pairs
+    fusion_window_seconds: int = Field(default=60, ge=1, le=600)
+
     # --- Media capture ---
     snapshot_on_alert: bool = True
     clip_on_alert: bool = False
@@ -124,8 +131,16 @@ class Settings(BaseSettings):
 
     def rtsp_stream_map(self) -> dict[str, str]:
         """Parse ``name|url`` entries into a dict."""
+        return self._pair_map(self.rtsp_streams)
+
+    def fusion_sensor_map(self) -> dict[str, str]:
+        """Parse ``camera|entity_id`` entries into a dict."""
+        return self._pair_map(self.fusion_sensors)
+
+    @staticmethod
+    def _pair_map(entries: list[str]) -> dict[str, str]:
         result: dict[str, str] = {}
-        for entry in self.rtsp_streams:
+        for entry in entries:
             name, sep, url = entry.partition("|")
             if sep and name.strip() and url.strip():
                 result[name.strip()] = url.strip()

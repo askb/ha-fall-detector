@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     fall_detector_media_path: str = "/media/fall_detector"
 
     # --- Static metadata ---
-    version: str = "0.2.0"
+    version: str = "0.3.0"
 
     model_config = {
         "env_prefix": "FALL_DETECTOR_",

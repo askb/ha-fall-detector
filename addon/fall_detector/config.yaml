@@ -3,7 +3,7 @@
 ---
 name: "Fall Detector"
 description: "AI-powered elderly fall detection using Frigate camera feeds"
-version: "0.2.0"
+version: "0.3.0"
 slug: "fall_detector"
 url: "https://github.com/askb/ha-fall-detector"
 arch:
